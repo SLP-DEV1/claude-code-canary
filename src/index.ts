@@ -8,16 +8,18 @@ import { formatDoctor, runDoctor } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
+import { createReproBundle } from './repro.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
+import { CANARY_VERSION } from './version.js';
 import { cachedClaudePath, installClaudeVersion, listCachedClaudeVersions, platformId } from './versions.js';
 
 const program = new Command();
 program
   .name('claude-canary')
   .description('Regression testing, comparison and bisect tooling for Claude Code')
-  .version('0.1.0');
+  .version(CANARY_VERSION);
 
 function resolveRecordingName(positional?: string, optionName?: string): string {
   if (positional && optionName && positional !== optionName) {
@@ -142,6 +144,26 @@ program.command('replay')
     });
     console.log(options.json ? JSON.stringify(result, null, 2) : formatRun(result));
     if (!result.passed) process.exitCode = 1;
+  });
+
+program.command('repro')
+  .description('Export a privacy-first reproduction bundle from a failed Canary result')
+  .argument('<result>', 'failed .canary/results/*.json artifact')
+  .option('--scenario <path>', 'explicit scenario path when automatic lookup is ambiguous')
+  .option('-o, --output <path>', 'bundle output directory')
+  .option('-f, --force', 'replace an existing bundle directory', false)
+  .action(async (resultPath: string, options: { scenario?: string; output?: string; force: boolean }) => {
+    const bundle = await createReproBundle(resultPath, {
+      cwd: process.cwd(),
+      scenarioPath: options.scenario,
+      output: options.output,
+      force: options.force,
+    });
+    console.log(`Claude Code Canary — reproduction bundle\n\nOutput: ${bundle.outputPath}\nBase commit: ${bundle.baseCommit}`);
+    console.log(`Exported fixture files: ${bundle.exportedFiles.length}`);
+    console.log(`Redacted fixture files: ${bundle.redactedFiles.length}`);
+    console.log(`Skipped fixture entries: ${bundle.skippedFiles.length}`);
+    console.log('\nReview README.md and issue-report.md before publishing the bundle.');
   });
 
 program.command('run')

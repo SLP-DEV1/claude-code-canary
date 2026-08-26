@@ -84,12 +84,21 @@ See [`RECORD_REPLAY.md`](RECORD_REPLAY.md) for the workflow, privacy model and l
 
 ## v0.5 — Reproduction bundles
 
-- `claude-canary repro <result>`
-- minimal fixture repository export
-- environment/version manifest
-- redacted stream event subset
-- one-command reproduction script
-- Markdown issue report generator
+- [x] `claude-canary repro <result>`
+- [x] exact recorded/base Git commit resolution
+- [x] minimal fixture repository export from deterministic scenario scope
+- [x] hard denylist for credential files, dependency caches and build outputs
+- [x] symlink refusal and text-only bounded export
+- [x] secret and machine-path redaction
+- [x] sanitized scenario and result artifacts without environment values/raw model output
+- [x] minimal environment/version manifest
+- [x] shell and PowerShell one-command reproduction launchers
+- [x] Markdown issue report generator
+- [x] fixture export manifest listing exported/redacted/skipped entries
+- [x] documented threat model and mandatory review workflow
+- [ ] optional opt-in redacted stream-event subset for cases where deterministic metadata is insufficient
+
+See [`REPRO_BUNDLES.md`](REPRO_BUNDLES.md) for the export model, exclusions and publishing safety guidance.
 
 ## v0.6 — Plugin compatibility and ecosystem
 
