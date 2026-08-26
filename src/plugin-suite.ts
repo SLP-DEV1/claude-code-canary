@@ -94,7 +94,7 @@ function normalizeRelative(value: string): string {
 }
 
 function safeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'plugin';
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'component';
 }
 
 function scenarioKindFromFile(fileName: string): { kind: PluginSuiteScenarioKind; component?: string } {
@@ -198,6 +198,27 @@ export async function assertGeneratedPluginSuiteFresh(suiteDir: string, discover
       `Generated plugin suite is stale: plugin surface changed (${added.length} added, ${removed.length} removed)` +
       `${details.length ? `: ${details.join(', ')}` : ''}. ` +
       `Re-run claude-canary plugin-init ${discovery.pluginRoot} --output ${path.resolve(suiteDir)} --force before testing the suite.`,
+    );
+  }
+}
+
+export function expectedGeneratedPluginSuiteScenarioIds(discovery: PluginDiscovery): string[] {
+  const ids = ['load'];
+  for (const component of discovery.commands) ids.push(`command-${safeSlug(component.name)}`);
+  for (const component of discovery.agents) ids.push(`agent-${safeSlug(component.name)}`);
+  for (const component of discovery.skills) ids.push(`skill-${safeSlug(component.name)}`);
+  for (const component of discovery.hooks) ids.push(`hook-${safeSlug(component.name)}`);
+  for (const component of discovery.mcpServers) ids.push(`mcp-${safeSlug(component.name)}`);
+  return ids;
+}
+
+export function assertGeneratedPluginSuiteCoverage(scenarios: PluginSuiteScenario[], discovery: PluginDiscovery): void {
+  const actual = new Set(scenarios.map((scenario) => scenario.id));
+  const missing = expectedGeneratedPluginSuiteScenarioIds(discovery).filter((id) => !actual.has(id));
+  if (missing.length) {
+    throw new Error(
+      `Generated plugin suite is incomplete: missing ${missing.length} expected scenario${missing.length === 1 ? '' : 's'} ` +
+      `(${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}). Re-run plugin-init --force before testing the suite.`,
     );
   }
 }
@@ -421,6 +442,7 @@ export async function runPluginSuite(options: RunPluginSuiteOptions): Promise<Pl
   const suiteDir = path.resolve(cwd, options.suiteDir ?? path.join('.canary', 'plugins', discovery.pluginName));
   await assertGeneratedPluginSuiteFresh(suiteDir, discovery);
   const loadedScenarios = await loadGeneratedPluginSuite(suiteDir);
+  assertGeneratedPluginSuiteCoverage(loadedScenarios, discovery);
   const scenarios = loadedScenarios.map((scenario) => ({
     ...scenario,
     path: normalizeRelative(path.relative(cwd, scenario.path)),
