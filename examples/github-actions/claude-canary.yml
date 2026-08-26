@@ -1,0 +1,29 @@
+name: Claude Canary
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare Claude Code releases
+        uses: SLP-DEV1/claude-code-canary@main
+        with:
+          scenario: .canary/basic.canary.yml
+          from: 2.1.89
+          to: latest
+          upload-results: "true"
