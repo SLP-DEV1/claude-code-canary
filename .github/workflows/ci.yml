@@ -26,4 +26,5 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Smoke-test CLI name
-        run: node dist/index.js --help | grep -q "Usage: claude-canary"
+        run: |
+          node dist/index.js --help | grep -q "Usage: claude-canary"
