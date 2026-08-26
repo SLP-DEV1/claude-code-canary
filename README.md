@@ -31,6 +31,7 @@ Canary turns those questions into repeatable tests.
 - `claude-canary run` — run one scenario in a disposable Git worktree
 - `claude-canary compare` — compare two executables **or two release versions**
 - `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
+- `claude-canary plugin-init` — discover a plugin and generate load/command/agent/skill/hook/MCP smoke scenarios automatically
 - `claude-canary plugin-matrix` — test one plugin across recent or explicitly selected Claude Code releases and emit JSON + Markdown compatibility tables
 - `claude-canary bisect --good <version> --bad <version>` — automatically find the first bad published Claude Code release
 - `claude-canary bisect --commands ...` — binary-search custom Claude executables/wrappers
@@ -128,6 +129,45 @@ The generated `issue-report.md` summarizes deterministic failures, versions, cha
 **Always inspect the complete generated bundle before publishing it.** Generic redaction cannot know which project-specific source code, customer names or business logic are confidential.
 
 See [`docs/REPRO_BUNDLES.md`](docs/REPRO_BUNDLES.md) for the fixture-selection rules, exclusions, threat model and publishing checklist.
+
+## Generate plugin smoke tests automatically
+
+Point Canary at a Claude Code plugin and it can turn the plugin surface into a reviewable smoke suite:
+
+```bash
+claude-canary plugin-init ./my-plugin
+```
+
+Canary reads `.claude-plugin/plugin.json`, follows both the standard plugin folders and manifest custom paths, and discovers commands, agents, skills, hooks and MCP servers. Inline hook/MCP definitions are supported too, and command/agent/skill frontmatter is used to produce more targeted smoke prompts.
+
+The default output looks like:
+
+```text
+.canary/plugins/my-plugin/
+├── README.md
+├── discovery.json
+├── load.canary.yml
+├── command-review.canary.yml
+├── agent-code-reviewer.canary.yml
+├── skill-api-testing.canary.yml
+├── hook-sessionstart.canary.yml
+└── mcp-github.canary.yml
+```
+
+Generated scenarios are read-only by default and deny repository file changes. They are intentionally editable scaffolds: a generator can discover plugin structure deterministically, but plugin-specific command arguments, hook matchers and MCP semantics may still need a tighter human-authored assertion.
+
+After generation, run any scenario through the release matrix:
+
+```bash
+claude-canary plugin-matrix \
+  .canary/plugins/my-plugin/load.canary.yml \
+  --plugin ./my-plugin \
+  --last 10
+```
+
+Use `--force` to regenerate an existing Canary-created suite. The command only replaces directories carrying Canary's marker and refuses arbitrary recursive deletion. Plugin trees containing symlinks are rejected to match the compatibility matrix's isolation rules.
+
+See [`docs/PLUGIN_SMOKE_GENERATOR.md`](docs/PLUGIN_SMOKE_GENERATOR.md) for discovery rules, generated files, safety behavior and current limitations.
 
 ## Test a plugin across Claude Code releases
 
@@ -407,7 +447,7 @@ Configuration experiments additionally write an aggregate `*-experiment.json` ar
 3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
 4. **v0.4 — record/replay**: core recording + exact-commit replay shipped; one-command capture and smarter assertion suggestions next
 5. **v0.5 — repro bundles**: privacy-first minimal fixture export, launchers and issue report shipped
-6. **v0.6 — ecosystem**: plugin compatibility matrix core shipped; plugin smoke generators, Action mode and badge/reporting integrations next
+6. **v0.6 — ecosystem**: plugin compatibility matrix + automatic smoke-suite generation shipped; multi-plugin suites, Action mode and badge/reporting integrations next
 7. **v1.0 — stable scenario schema and reporter API**
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for details.
