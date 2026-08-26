@@ -12,7 +12,7 @@ import { cachedClaudePath, installClaudeVersion, listCachedClaudeVersions, platf
 
 const program = new Command();
 program
-  .name('cc-canary')
+  .name('claude-canary')
   .description('Regression testing, comparison and bisect tooling for Claude Code')
   .version('0.1.0');
 
@@ -156,6 +156,6 @@ program.command('doctor')
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
-  console.error(`cc-canary: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
