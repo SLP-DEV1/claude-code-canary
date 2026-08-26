@@ -110,6 +110,8 @@ First bad release: 2.1.232
 
 It does **not** run every intermediate release. The search is logarithmic, so a range containing dozens of releases typically needs only a handful of actual Claude runs.
 
+Like `git bisect`, release bisection assumes a monotonic transition: the scenario is good before some boundary and bad from that boundary onward. Flaky scenarios or regressions that disappear and later reappear can mislead binary search; stabilize the scenario or repeat it before trusting the reported boundary.
+
 ## Scenario format
 
 ```yaml
