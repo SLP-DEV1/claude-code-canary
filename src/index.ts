@@ -6,6 +6,7 @@ import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
+import { formatPluginMatrixMarkdown, runPluginMatrix } from './plugin-matrix.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
 import { createReproBundle } from './repro.js';
@@ -234,6 +235,50 @@ program.command('experiment')
     });
     console.log(options.json ? JSON.stringify(result, null, 2) : formatExperiment(result));
     if (result.candidate.aggregate.passRate < result.baseline.aggregate.passRate) process.exitCode = 1;
+  });
+
+program.command('plugin-matrix')
+  .description('Test one Claude Code plugin across a release matrix')
+  .argument('[scenario]', 'deterministic plugin smoke scenario', '.canary/plugin-smoke.canary.yml')
+  .requiredOption('--plugin <path>', 'plugin directory or .zip file')
+  .option('--versions <versions...>', 'exact Claude Code releases to test')
+  .option('--from <version>', 'oldest exact published release to test')
+  .option('--to <version>', 'newest exact published release to test')
+  .option('--last <count>', 'test the newest N published releases')
+  .option('--platform <id>', 'override release platform id')
+  .option('--json', 'print JSON instead of Markdown', false)
+  .option('--allow-incompatible', 'do not fail the command when any tested release is incompatible', false)
+  .action(async (scenarioPath: string, options: {
+    plugin: string;
+    versions?: string[];
+    from?: string;
+    to?: string;
+    last?: string;
+    platform?: string;
+    json: boolean;
+    allowIncompatible: boolean;
+  }) => {
+    const scenario = await loadScenario(scenarioPath);
+    const last = options.last === undefined ? undefined : Number(options.last);
+    if (options.last !== undefined && (!Number.isInteger(last) || (last ?? 0) < 1)) {
+      throw new Error('--last must be a positive integer.');
+    }
+    const result = await runPluginMatrix(scenario, {
+      cwd: process.cwd(),
+      pluginPath: options.plugin,
+      versions: options.versions,
+      from: options.from,
+      to: options.to,
+      last,
+      platform: options.platform,
+      onStatus: (message) => console.error(message),
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatPluginMatrixMarkdown(result));
+    if (!options.json) {
+      console.log(`JSON artifact: ${result.jsonArtifactPath}`);
+      console.log(`Markdown artifact: ${result.markdownArtifactPath}`);
+    }
+    if (result.incompatible > 0 && !options.allowIncompatible) process.exitCode = 1;
   });
 
 program.command('bisect')
