@@ -1,0 +1,34 @@
+version: 1
+name: plugin-smoke
+
+prompt: |
+  Exercise the plugin capability this repository depends on.
+  Complete the requested plugin-backed operation and make only the expected deterministic change.
+
+claude:
+  executable: claude
+  permission_mode: dontAsk
+  max_turns: 12
+  timeout_seconds: 600
+
+verify:
+  commands:
+    - test -f plugin-smoke-output.txt
+
+expect:
+  changed_files:
+    allow:
+      - plugin-smoke-output.txt
+    require:
+      - plugin-smoke-output.txt
+    deny: []
+  files_exist:
+    - plugin-smoke-output.txt
+  files_absent: []
+  file_contains:
+    - path: plugin-smoke-output.txt
+      text: plugin-ok
+
+limits:
+  max_tool_calls: 50
+  max_total_tokens: 100000
