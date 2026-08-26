@@ -83,12 +83,26 @@ claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
 
 A compatibility matrix is only as meaningful as its deterministic scenario. Prefer assertions that prove the plugin actually participated in the task. Examples:
 
-- ask Claude to invoke a command/tool exposed by the plugin;
+- dispatch a namespaced plugin slash command directly through the scenario prompt;
 - verify a deterministic file produced by that command;
 - use a verification command that checks plugin-generated output;
-- require a specific changed file or content marker.
+- require a specific changed file or content marker;
+- check stable Claude process output with `claude_output_contains` / `claude_output_absent`.
+
+For a print-mode plugin command, a useful minimum guard is:
+
+```yaml
+prompt: "/my-plugin:review run a harmless read-only smoke check"
+expect:
+  claude_output_absent:
+    - "Unknown command:"
+```
+
+This catches command-resolution failures that may still return process exit code 0. Output assertions inspect combined Claude stdout/stderr in memory; raw process/model output is not added to the normal Canary result artifact.
 
 Avoid a scenario that can pass without touching the plugin, because that only proves Claude Code itself still works.
+
+`claude-canary plugin-init ./my-plugin` can generate conservative load/command/agent/skill/hook/MCP starting scenarios automatically. Review and tighten them for the plugin's actual contract.
 
 ## Isolation and limitations
 
