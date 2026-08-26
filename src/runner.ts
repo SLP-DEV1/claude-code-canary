@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Scenario } from './config.js';
 import { evaluateExpectations } from './evaluate.js';
@@ -7,10 +8,18 @@ import { parseStreamMetrics } from './metrics.js';
 import { runShellCommand, spawnCapture } from './process.js';
 import type { CommandSummary, ProcessResult, RunResult } from './types.js';
 
-interface RunOptions {
+export interface PreparedRun {
+  extraClaudeArgs?: string[];
+  env?: NodeJS.ProcessEnv;
+  fixtureState?: Record<string, string | null>;
+  cleanup?: () => Promise<void>;
+}
+
+export interface RunOptions {
   cwd?: string;
   executableOverride?: string;
   artifactLabel?: string;
+  prepareWorktree?: (worktreePath: string) => Promise<PreparedRun>;
 }
 
 function summarize(command: string, result: ProcessResult): CommandSummary {
@@ -31,6 +40,32 @@ async function writeArtifact(repoRoot: string, result: RunResult, label?: string
   return file;
 }
 
+async function currentFileHash(file: string): Promise<string | null> {
+  try {
+    return createHash('sha256').update(await readFile(file)).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+export async function filterFixtureChanges(
+  worktreePath: string,
+  changedFiles: string[],
+  fixtureState: Record<string, string | null> = {},
+): Promise<string[]> {
+  const filtered: string[] = [];
+  for (const relative of changedFiles) {
+    if (!(relative in fixtureState)) {
+      filtered.push(relative);
+      continue;
+    }
+    const expected = fixtureState[relative];
+    const current = await currentFileHash(path.join(worktreePath, relative));
+    if (current !== expected) filtered.push(relative);
+  }
+  return filtered;
+}
+
 export async function runScenario(scenario: Scenario, options: RunOptions = {}): Promise<RunResult> {
   const invocationDir = options.cwd ?? process.cwd();
   const repoRoot = await getRepoRoot(invocationDir);
@@ -46,8 +81,11 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
   const verification: CommandSummary[] = [];
   const failures: string[] = [];
   const executable = options.executableOverride ?? scenario.claude.executable;
+  let prepared: PreparedRun | undefined;
 
   try {
+    prepared = options.prepareWorktree ? await options.prepareWorktree(worktree.path) : undefined;
+
     let setupOk = true;
     for (const command of scenario.setup?.commands ?? []) {
       const processResult = await runShellCommand(command, worktree.path);
@@ -76,11 +114,12 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       if (scenario.claude.max_turns !== undefined) args.push('--max-turns', String(scenario.claude.max_turns));
       if (scenario.claude.max_budget_usd !== undefined) args.push('--max-budget-usd', String(scenario.claude.max_budget_usd));
       args.push(...scenario.claude.args);
+      args.push(...prepared?.extraClaudeArgs ?? []);
 
       claudeResult = await spawnCapture(executable, args, {
         cwd: worktree.path,
         timeoutMs: scenario.claude.timeout_seconds * 1000,
-        env: { ...process.env, ...scenario.claude.env },
+        env: { ...process.env, ...scenario.claude.env, ...prepared?.env },
       });
 
       if (claudeResult.timedOut) failures.push(`Claude timed out after ${scenario.claude.timeout_seconds}s`);
@@ -97,7 +136,8 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       }
     }
 
-    const changedFiles = await getChangedFiles(worktree.path);
+    const rawChangedFiles = await getChangedFiles(worktree.path);
+    const changedFiles = await filterFixtureChanges(worktree.path, rawChangedFiles, prepared?.fixtureState);
     failures.push(...await evaluateExpectations(scenario, worktree.path, changedFiles, metrics));
 
     const result: RunResult = {
@@ -120,6 +160,10 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
     result.artifactPath = await writeArtifact(repoRoot, result, options.artifactLabel);
     return result;
   } finally {
-    await worktree.cleanup();
+    try {
+      await prepared?.cleanup?.();
+    } finally {
+      await worktree.cleanup();
+    }
   }
 }

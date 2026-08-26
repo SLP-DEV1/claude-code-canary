@@ -46,13 +46,21 @@ The manager never rewrites the user's normal Claude binary/symlink. Published re
 
 ## v0.3 — Configuration experiments
 
-- `CLAUDE.md` A/B tests
-- isolated settings overlays
-- hook configuration variants
-- plugin directory variants
-- MCP configuration variants
-- repeated trials and aggregate statistics
-- significance/noise warnings for nondeterministic outcomes
+- [x] `CLAUDE.md` / `CLAUDE.local.md` A/B tests
+- [x] isolated project/local settings overlays
+- [x] rules and hook-directory variants
+- [x] local plugin directory / zip variants
+- [x] strict MCP configuration variants
+- [x] repeated interleaved trials and aggregate statistics
+- [x] pass-rate, token, tool-call, cost and duration deltas
+- [x] machine-readable aggregate experiment artifact
+- [x] fixture-aware changed-file assertions
+- [x] user CLAUDE.md/rules/settings exclusion and auto-memory disable
+- [ ] multi-scenario experiment suites
+- [ ] confidence/noise warnings for nondeterministic outcomes
+- [ ] percentile/median reporting for longer experiment runs
+
+See [`CONFIG_EXPERIMENTS.md`](CONFIG_EXPERIMENTS.md) for the variant layout and isolation model.
 
 ## v0.4 — Record and replay
 

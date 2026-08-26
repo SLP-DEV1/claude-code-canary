@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
+import { formatExperiment, runExperiment } from './experiment.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
@@ -95,6 +96,27 @@ program.command('compare')
     const candidate = await runScenario(scenario, { executableOverride: candidateExecutable, artifactLabel: candidateLabel });
     console.log(options.json ? JSON.stringify({ baseline, candidate }, null, 2) : formatComparison(baseline, candidate));
     if (!candidate.passed) process.exitCode = 1;
+  });
+
+program.command('experiment')
+  .description('A/B test two Claude Code configuration variants')
+  .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
+  .requiredOption('--baseline-config <dir>', 'baseline configuration variant directory')
+  .requiredOption('--candidate-config <dir>', 'candidate configuration variant directory')
+  .option('--runs <count>', 'runs per variant', '3')
+  .option('-e, --executable <path>', 'override Claude executable for both variants')
+  .option('--json', 'print JSON instead of the human report', false)
+  .action(async (scenarioPath: string, options: { baselineConfig: string; candidateConfig: string; runs: string; executable?: string; json: boolean }) => {
+    const scenario = await loadScenario(scenarioPath);
+    const runs = Number(options.runs);
+    if (!Number.isInteger(runs) || runs < 1 || runs > 50) throw new Error('--runs must be an integer between 1 and 50.');
+    const result = await runExperiment(scenario, options.baselineConfig, options.candidateConfig, {
+      cwd: process.cwd(),
+      runs,
+      executableOverride: options.executable,
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatExperiment(result));
+    if (result.candidate.aggregate.passRate < result.baseline.aggregate.passRate) process.exitCode = 1;
   });
 
 program.command('bisect')
