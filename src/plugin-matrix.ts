@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Scenario } from './config.js';
@@ -109,18 +109,33 @@ export function assertPluginMatrixCompatibleScenario(scenario: Scenario): void {
   }
 }
 
+export async function assertPluginTreeSafe(pluginRoot: string): Promise<void> {
+  const rootInfo = await lstat(pluginRoot);
+  if (rootInfo.isSymbolicLink()) throw new Error(`Plugin path must not be a symbolic link: ${pluginRoot}`);
+  if (!rootInfo.isDirectory()) throw new Error('Plugin path must be a directory.');
+
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Plugin directory contains a symbolic link, which is refused for matrix isolation: ${full}`);
+      }
+      if (entry.isDirectory()) await walk(full);
+    }
+  };
+
+  await walk(pluginRoot);
+}
+
 async function validatePluginPath(pluginPath: string): Promise<{ absolute: string; name: string }> {
   const absolute = path.resolve(pluginPath);
-  let info;
   try {
-    info = await stat(absolute);
-  } catch {
-    throw new Error(`Plugin path does not exist: ${pluginPath}`);
+    await assertPluginTreeSafe(absolute);
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('symbolic link') || error.message.includes('must be a directory'))) throw error;
+    throw new Error(`Plugin path does not exist or cannot be inspected: ${pluginPath}`);
   }
-  if (!info.isDirectory() && !(info.isFile() && absolute.toLowerCase().endsWith('.zip'))) {
-    throw new Error('Plugin path must be a directory or .zip file.');
-  }
-  return { absolute, name: path.basename(absolute).replace(/\.zip$/i, '') || 'plugin' };
+  return { absolute, name: path.basename(absolute) || 'plugin' };
 }
 
 async function preparePluginCopy(pluginPath: string): Promise<PreparedRun> {
