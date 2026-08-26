@@ -45,4 +45,24 @@ describe('deterministic expectations', () => {
     const failures = await evaluateExpectations(scenario, dir, ['README.md'], metrics);
     expect(failures[0]).toMatch(/Unexpected changed file/);
   });
+
+  it('checks required and forbidden Claude process output', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'canary-eval-'));
+    const scenario = parseScenario({
+      version: 1,
+      name: 'output-check',
+      prompt: 'x',
+      expect: {
+        claude_output_contains: ['PLUGIN_OK'],
+        claude_output_absent: ['Unknown command:'],
+      },
+    });
+
+    await expect(evaluateExpectations(scenario, dir, [], metrics, 'PLUGIN_OK\n')).resolves.toEqual([]);
+    const failures = await evaluateExpectations(scenario, dir, [], metrics, 'Unknown command: /demo:hello\n');
+    expect(failures).toEqual(expect.arrayContaining([
+      expect.stringMatching(/does not contain expected text.*PLUGIN_OK/),
+      expect.stringMatching(/contains forbidden text.*Unknown command/),
+    ]));
+  });
 });
