@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadScenario, type Scenario } from './config.js';
 import { getRepoRoot } from './git.js';
-import { discoverPlugin } from './plugin-init.js';
+import { discoverPlugin, type PluginDiscovery } from './plugin-init.js';
 import {
   resolvePluginMatrixVersions,
   runPluginMatrix,
@@ -117,6 +117,89 @@ async function assertRegularFile(file: string, label: string): Promise<void> {
   const info = await lstat(file);
   if (info.isSymbolicLink()) throw new Error(`${label} must not be a symbolic link: ${file}`);
   if (!info.isFile()) throw new Error(`${label} must be a regular file: ${file}`);
+}
+
+function parsedDiscoverySurface(value: unknown): { pluginName: string; keys: string[] } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('discovery.json must contain a JSON object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.pluginName !== 'string' || !record.pluginName) {
+    throw new Error('discovery.json is missing pluginName.');
+  }
+
+  const fields = ['commands', 'agents', 'skills', 'hooks', 'mcpServers'] as const;
+  const keys: string[] = [];
+  for (const field of fields) {
+    const entries = record[field];
+    if (!Array.isArray(entries)) throw new Error(`discovery.json ${field} must be an array.`);
+    for (const entry of entries) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw new Error(`discovery.json ${field} contains an invalid component.`);
+      }
+      const component = entry as Record<string, unknown>;
+      if (typeof component.name !== 'string' || typeof component.path !== 'string') {
+        throw new Error(`discovery.json ${field} component is missing name/path.`);
+      }
+      keys.push(`${field}\u0000${component.name}\u0000${component.path}`);
+    }
+  }
+  return { pluginName: record.pluginName, keys: keys.sort() };
+}
+
+function liveDiscoverySurface(discovery: PluginDiscovery): string[] {
+  const groups = [
+    ['commands', discovery.commands],
+    ['agents', discovery.agents],
+    ['skills', discovery.skills],
+    ['hooks', discovery.hooks],
+    ['mcpServers', discovery.mcpServers],
+  ] as const;
+  return groups
+    .flatMap(([field, entries]) => entries.map((entry) => `${field}\u0000${entry.name}\u0000${entry.path}`))
+    .sort();
+}
+
+function displaySurfaceKey(key: string): string {
+  return key.split('\u0000').join(':');
+}
+
+export async function assertGeneratedPluginSuiteFresh(suiteDir: string, discovery: PluginDiscovery): Promise<void> {
+  const discoveryFile = path.join(path.resolve(suiteDir), 'discovery.json');
+  try {
+    await assertRegularFile(discoveryFile, 'Plugin suite discovery metadata');
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('symbolic link')) throw error;
+    throw new Error(`Generated plugin suite is missing a regular discovery.json file: ${suiteDir}. Re-run plugin-init.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(discoveryFile, 'utf8'));
+  } catch (error) {
+    throw new Error(`Could not parse plugin suite discovery.json: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const saved = parsedDiscoverySurface(parsed);
+  if (saved.pluginName !== discovery.pluginName) {
+    throw new Error(`Generated suite belongs to plugin ${saved.pluginName}, but --plugin resolves to ${discovery.pluginName}.`);
+  }
+
+  const live = liveDiscoverySurface(discovery);
+  const savedSet = new Set(saved.keys);
+  const liveSet = new Set(live);
+  const added = live.filter((key) => !savedSet.has(key));
+  const removed = saved.keys.filter((key) => !liveSet.has(key));
+  if (added.length || removed.length) {
+    const details = [
+      ...added.slice(0, 3).map((key) => `added ${displaySurfaceKey(key)}`),
+      ...removed.slice(0, 3).map((key) => `removed ${displaySurfaceKey(key)}`),
+    ];
+    throw new Error(
+      `Generated plugin suite is stale: plugin surface changed (${added.length} added, ${removed.length} removed)` +
+      `${details.length ? `: ${details.join(', ')}` : ''}. ` +
+      `Re-run claude-canary plugin-init ${discovery.pluginRoot} --output ${path.resolve(suiteDir)} --force before testing the suite.`,
+    );
+  }
 }
 
 export async function loadGeneratedPluginSuite(suiteDir: string): Promise<PluginSuiteScenario[]> {
@@ -336,6 +419,7 @@ export async function runPluginSuite(options: RunPluginSuiteOptions): Promise<Pl
   const pluginPath = path.resolve(cwd, options.pluginPath);
   const discovery = await discoverPlugin(pluginPath);
   const suiteDir = path.resolve(cwd, options.suiteDir ?? path.join('.canary', 'plugins', discovery.pluginName));
+  await assertGeneratedPluginSuiteFresh(suiteDir, discovery);
   const loadedScenarios = await loadGeneratedPluginSuite(suiteDir);
   const scenarios = loadedScenarios.map((scenario) => ({
     ...scenario,
