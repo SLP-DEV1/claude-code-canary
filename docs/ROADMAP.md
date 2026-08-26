@@ -16,31 +16,30 @@ Claude Code Canary aims to become the compatibility and regression layer for ser
 - [x] JSON artifacts
 - [x] doctor and config validation
 - [x] CI across supported Node releases
+- [x] reusable GitHub Action with workflow summary and artifact upload
+- [x] README/status badge integration documentation
 - [ ] JUnit reporter
 - [ ] Windows integration fixture
 - [ ] macOS integration fixture
 
-## v0.2 — Claude Code version intelligence
+## v0.2 — Claude Code version manager
 
-Goal: make comparisons and regression bisection work without users manually maintaining old binaries or replacing their system Claude installation.
+Goal: make comparisons work without users manually maintaining old binaries or replacing their system Claude installation.
 
 - [x] resolve exact, `stable` and `latest` releases from official distribution endpoints
 - [x] isolated per-version/per-platform binary cache
 - [x] verify SHA256 checksum and published file size before accepting a binary
-- [x] verify detached manifests for 2.1.89+ with pinned Anthropic release-signing fingerprint
-- [x] explicitly mark pre-2.1.89 installs as checksum-only
 - [x] re-verify cached binary before reuse
 - [x] Windows, macOS, Linux and musl platform mapping
-- [x] `cc-canary versions list`
-- [x] `cc-canary versions install <version>`
-- [x] `cc-canary versions path <version>`
-- [x] `cc-canary compare --from <version> --to <version>`
-- [x] discover actual published release ranges for `cc-canary bisect --good <version> --bad <version>`
-- [x] lazily download only the releases probed by binary search
+- [x] `claude-canary versions list`
+- [x] `claude-canary versions install <version>`
+- [x] `claude-canary versions path <version>`
+- [x] `claude-canary compare --from <version> --to <version>`
+- [x] verify detached manifest GPG signatures with pinned Anthropic fingerprint for signed releases
+- [ ] release-range discovery for `claude-canary bisect --good <version> --bad <version>`
 - [ ] resumable downloads and cache pruning
-- [ ] offline catalog snapshot / explicitly cached-only bisect mode
 
-The manager never rewrites the user's normal Claude binary/symlink. Published release bisection uses the package release catalog as an index, while every native binary is still obtained and authenticated through Canary's release cache.
+The manager intentionally avoids the deprecated global npm installation path and never rewrites the user's normal Claude binary/symlink.
 
 ## v0.3 — Configuration experiments
 
@@ -62,20 +61,20 @@ The manager never rewrites the user's normal Claude binary/symlink. Published re
 
 ## v0.5 — Reproduction bundles
 
-- `cc-canary repro <result>`
+- `claude-canary repro <result>`
 - minimal fixture repository export
 - environment/version manifest
 - redacted stream event subset
 - one-command reproduction script
 - Markdown issue report generator
 
-## v0.6 — Plugin compatibility
+## v0.6 — Plugin compatibility and ecosystem
 
 - plugin discovery fixture generator
 - hooks/skills/commands/MCP smoke tests
 - multi-version compatibility matrix
-- reusable GitHub Action
-- README compatibility badge
+- Action performance/caching improvements
+- richer badge/reporting integrations
 
 ## v1.0
 

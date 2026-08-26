@@ -11,11 +11,11 @@ Canary instead downloads the exact release binary into its own cache and passes 
 ## Commands
 
 ```bash
-cc-canary versions install 2.1.89
-cc-canary versions install stable
-cc-canary versions install latest
-cc-canary versions list
-cc-canary versions path 2.1.89
+claude-canary versions install 2.1.89
+claude-canary versions install stable
+claude-canary versions install latest
+claude-canary versions list
+claude-canary versions path 2.1.89
 ```
 
 The `stable` and `latest` channel names are resolved to an exact version before caching.
@@ -23,7 +23,7 @@ The `stable` and `latest` channel names are resolved to an exact version before 
 You can then compare versions directly:
 
 ```bash
-cc-canary compare .canary/basic.canary.yml --from 2.1.89 --to latest
+claude-canary compare .canary/basic.canary.yml --from 2.1.89 --to latest
 ```
 
 Canary downloads missing versions automatically for `--from` / `--to` and never changes the system-wide Claude Code symlink/install.
@@ -87,4 +87,4 @@ The manager currently maps:
 - `linux-x64`, `linux-arm64`
 - `linux-x64-musl`, `linux-arm64-musl`
 
-Linux musl detection uses Node's runtime report when available. You can explicitly choose a release platform with `cc-canary versions install <version> --platform <id>`.
+Linux musl detection uses Node's runtime report when available. You can explicitly choose a release platform with `claude-canary versions install <version> --platform <id>`.

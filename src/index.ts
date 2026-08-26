@@ -2,10 +2,9 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
-import { bisectCommands, bisectReleases } from './bisect.js';
+import { bisectCommands } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
-import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
@@ -13,7 +12,7 @@ import { cachedClaudePath, installClaudeVersion, listCachedClaudeVersions, platf
 
 const program = new Command();
 program
-  .name('cc-canary')
+  .name('claude-canary')
   .description('Regression testing, comparison and bisect tooling for Claude Code')
   .version('0.1.0');
 
@@ -98,40 +97,13 @@ program.command('compare')
   });
 
 program.command('bisect')
-  .description('Find the first bad Claude Code release or executable')
+  .description('Find the first bad executable in an ordered list')
   .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
-  .option('--commands <commands...>', 'ordered executables, first good and last bad')
-  .option('--good <version>', 'known-good published Claude Code version')
-  .option('--bad <version>', 'known-bad published Claude Code version')
-  .option('--platform <id>', 'override release platform id for --good/--bad mode')
-  .action(async (scenarioPath: string, options: { commands?: string[]; good?: string; bad?: string; platform?: string }) => {
+  .requiredOption('--commands <commands...>', 'ordered executables, first good and last bad')
+  .action(async (scenarioPath: string, options: { commands: string[] }) => {
     const scenario = await loadScenario(scenarioPath);
-    const usingCommands = Boolean(options.commands?.length);
-    const usingReleases = Boolean(options.good || options.bad);
-    if (usingCommands && usingReleases) throw new Error('Use either --commands or --good/--bad release mode, not both.');
-
-    if (usingReleases) {
-      if (!options.good || !options.bad) throw new Error('--good and --bad must be provided together.');
-      const versions = await fetchPublishedVersionsBetween(options.good, options.bad);
-      console.error(`Bisecting ${versions.length} published Claude Code releases from ${options.good} to ${options.bad}.`);
-      const result = await bisectReleases(scenario, versions, {
-        cwd: process.cwd(),
-        platform: options.platform,
-        onStatus: (message) => console.error(message),
-      });
-      console.log('Claude Code Canary — release bisect\n');
-      for (const [index, run] of [...result.runs.entries()].sort((a, b) => a[0] - b[0])) {
-        console.log(`${run.passed ? 'PASS' : 'FAIL'}  ${result.versions[index]}`);
-      }
-      console.log(`\nFirst bad release: ${result.firstBadVersion}`);
-      return;
-    }
-
-    if (!options.commands || options.commands.length < 2) {
-      throw new Error('Bisect requires --good <version> --bad <version>, or --commands <good> ... <bad>.');
-    }
     const result = await bisectCommands(scenario, options.commands, process.cwd());
-    console.log('Claude Code Canary — executable bisect\n');
+    console.log('Claude Code Canary — bisect\n');
     for (const [index, run] of [...result.runs.entries()].sort((a, b) => a[0] - b[0])) {
       console.log(`${run.passed ? 'PASS' : 'FAIL'}  [${index}] ${options.commands[index]}`);
     }
@@ -184,6 +156,6 @@ program.command('doctor')
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
-  console.error(`cc-canary: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });

@@ -4,7 +4,7 @@
   "description": "Regression testing, comparison and bisect tooling for Claude Code",
   "type": "module",
   "bin": {
-    "cc-canary": "./dist/index.js"
+    "claude-canary": "./dist/index.js"
   },
   "files": [
     "dist",
