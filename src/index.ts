@@ -6,6 +6,7 @@ import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
+import { generatePluginScenarios } from './plugin-init.js';
 import { formatPluginMatrixMarkdown, runPluginMatrix } from './plugin-matrix.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
@@ -235,6 +236,37 @@ program.command('experiment')
     });
     console.log(options.json ? JSON.stringify(result, null, 2) : formatExperiment(result));
     if (result.candidate.aggregate.passRate < result.baseline.aggregate.passRate) process.exitCode = 1;
+  });
+
+program.command('plugin-init')
+  .description('Discover a Claude Code plugin and generate smoke-test scenarios')
+  .argument('<plugin>', 'plugin directory')
+  .option('-o, --output <dir>', 'output directory (default: .canary/plugins/<plugin-name>)')
+  .option('-f, --force', 'replace a previous Canary-generated plugin smoke suite', false)
+  .option('--json', 'print generated suite metadata as JSON', false)
+  .action(async (pluginPath: string, options: { output?: string; force: boolean; json: boolean }) => {
+    const result = await generatePluginScenarios(pluginPath, {
+      cwd: process.cwd(),
+      output: options.output,
+      force: options.force,
+    });
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`Claude Code Canary — plugin smoke suite\n\nPlugin: ${result.pluginName}\nOutput: ${result.outputDir}`);
+    console.log(`Commands: ${result.discovery.commands.length}`);
+    console.log(`Agents: ${result.discovery.agents.length}`);
+    console.log(`Skills: ${result.discovery.skills.length}`);
+    console.log(`Hooks: ${result.discovery.hooks.length}`);
+    console.log(`MCP servers: ${result.discovery.mcpServers.length}`);
+    console.log(`Generated scenarios: ${result.scenarios.length}`);
+    if (result.discovery.warnings.length) {
+      console.log('\nWarnings:');
+      for (const warning of result.discovery.warnings) console.log(`  - ${warning}`);
+    }
+    console.log(`\nDiscovery: ${result.discoveryPath}`);
+    console.log(`Next: claude-canary plugin-matrix ${result.scenarios[0]?.path ?? '<scenario>'} --plugin ${pluginPath} --last 10`);
   });
 
 program.command('plugin-matrix')
