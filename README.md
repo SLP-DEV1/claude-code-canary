@@ -2,7 +2,7 @@
 
 **Catch Claude Code regressions before they catch you.**
 
-Claude Code Canary is an open-source regression harness for Claude Code. It runs the same coding scenario in isolated Git worktrees, records deterministic outcomes and agent metrics, and compares Claude Code binaries/configurations side by side.
+Claude Code Canary is an open-source regression harness for Claude Code. It runs the same coding scenario in isolated Git worktrees, records deterministic outcomes and agent metrics, and compares Claude Code versions/configurations side by side.
 
 > Status: **early MVP / v0.1 development**. The core runner is usable, but interfaces may still change.
 
@@ -18,17 +18,18 @@ Claude Code changes quickly. So do your `CLAUDE.md`, hooks, plugins, MCP servers
 
 Canary turns those questions into repeatable tests.
 
-## What works in the MVP
+## What works now
 
 - `cc-canary init` — create a scenario file
 - `cc-canary validate` — validate YAML before spending tokens
 - `cc-canary run` — run one scenario in a disposable Git worktree
-- `cc-canary compare` — run the same scenario against two Claude executables
+- `cc-canary compare` — compare two executables **or two release versions**
 - `cc-canary bisect` — binary-search an ordered list of Claude executables/wrappers for the first bad one
+- `cc-canary versions install|list|path` — isolated historical Claude Code cache
 - `cc-canary doctor` — check Git, Claude and repository readiness
 - deterministic verification commands
 - changed-file allow/deny rules
-- expected/forbidden file assertions
+- expected/forbidden file and content assertions
 - max tool-call / token / cost limits
 - `stream-json` capture with tool-use and usage metrics
 - JSON result artifacts for CI and later analysis
@@ -39,8 +40,7 @@ Requirements:
 
 - Node.js 20+
 - Git
-- Claude Code installed and authenticated
-- a Git repository to test
+- Claude Code authenticated (your normal installation can remain untouched)
 
 ```bash
 npm install
@@ -53,6 +53,23 @@ cc-canary run .canary/basic.canary.yml
 ```
 
 Canary deliberately uses Claude Code's documented non-interactive CLI (`claude -p`) and `stream-json` output instead of scraping the interactive terminal UI.
+
+## Compare actual Claude Code releases
+
+Canary can keep multiple native Claude Code binaries in its own cache. It resolves exact versions or the `stable` / `latest` channels from Anthropic's official release distribution, downloads the platform binary and verifies its SHA256 checksum against that release's `manifest.json`.
+
+```bash
+cc-canary versions install 2.1.89
+cc-canary versions list
+
+cc-canary compare .canary/basic.canary.yml \
+  --from 2.1.89 \
+  --to latest
+```
+
+Missing versions are cached automatically. Canary **does not replace or downgrade your normal `claude` installation**.
+
+See [`docs/VERSION_MANAGER.md`](docs/VERSION_MANAGER.md) for cache layout and the current integrity model.
 
 ## Scenario format
 
@@ -90,6 +107,9 @@ expect:
   files_exist:
     - src/auth/index.ts
   files_absent: []
+  file_contains:
+    - path: src/auth/index.ts
+      text: authenticate
 
 limits:
   max_tool_calls: 100
@@ -99,14 +119,14 @@ limits:
 
 A scenario passes only when Claude exits successfully **and** every deterministic assertion passes.
 
-## Compare two Claude Code builds
+## Compare custom Claude builds/wrappers
 
-Point Canary at two executables or wrapper scripts:
+You can still point Canary at any two executables:
 
 ```bash
 cc-canary compare .canary/basic.canary.yml \
-  --baseline /opt/claude/2.1.220/claude \
-  --candidate /opt/claude/2.1.237/claude
+  --baseline /opt/claude/old/claude \
+  --candidate /opt/claude/new/claude
 ```
 
 Example output:
@@ -124,27 +144,27 @@ Duration               2m 13s       2m 41s
 Candidate regression detected.
 ```
 
-The MVP accepts executable paths instead of downloading historical Claude versions itself. A safe, cross-platform version manager is planned next.
-
 ## Find the first bad build
 
 If you already have ordered Claude executables/wrappers:
 
 ```bash
 cc-canary bisect .canary/basic.canary.yml --commands \
-  ./claude-2.1.220 \
-  ./claude-2.1.223 \
-  ./claude-2.1.227 \
-  ./claude-2.1.237
+  ./claude-good \
+  ./claude-middle-a \
+  ./claude-middle-b \
+  ./claude-bad
 ```
 
-Canary verifies the first command is good and the last is bad, then binary-searches the range.
+Canary verifies the first command is good and the last is bad, then binary-searches the range. Automatic release-number range discovery is next on the roadmap.
 
 ## Safety model
 
 Canary isolates **files**, not your whole machine. Each run uses a disposable detached Git worktree, but commands executed by Claude or scenario setup/verification still run with your OS account permissions.
 
 For untrusted repositories or aggressive permission settings, run Canary inside a container/VM. Canary defaults to conservative behavior and never enables `bypassPermissions` for you.
+
+The version cache verifies downloaded binaries against release SHA256 checksums. Detached GPG verification of Anthropic's signed manifest is the next version-manager security milestone; see the version-manager documentation for details.
 
 ## Result artifacts
 
@@ -154,26 +174,12 @@ Each run writes a JSON result under:
 .canary/results/<timestamp>-<scenario>.json
 ```
 
-The artifact contains:
-
-- pass/fail and assertion failures
-- Claude exit status
-- changed files
-- verification command results
-- duration
-- tool-call count
-- token usage when reported by Claude Code
-- cost when reported by Claude Code
-- captured hook event names when present
-
-Raw model text is not copied into the summary artifact by default.
+The artifact contains pass/fail, assertion failures, Claude exit status, changed files, verification command summaries, duration, tool-call count, token usage, cost and captured hook-event names when available. Raw model text is not copied into the summary artifact by default.
 
 ## Roadmap
 
-The direction is intentionally bigger than a simple test runner:
-
 1. **v0.1 — deterministic harness**: run, compare, bisect, metrics, CI
-2. **v0.2 — version manager**: install/cache historical Claude Code builds safely
+2. **v0.2 — version manager**: isolated checksum-verified historical Claude binaries (in progress)
 3. **v0.3 — config experiments**: A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configs
 4. **v0.4 — record/replay**: turn a real Claude task into a reusable regression scenario
 5. **v0.5 — repro bundles**: export a minimal redacted bug reproduction

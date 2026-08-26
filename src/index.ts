@@ -8,6 +8,7 @@ import { formatDoctor, runDoctor } from './doctor.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
+import { cachedClaudePath, installClaudeVersion, listCachedClaudeVersions, platformId } from './versions.js';
 
 const program = new Command();
 program
@@ -59,17 +60,40 @@ program.command('run')
   });
 
 program.command('compare')
-  .description('Compare the same scenario across two Claude executables')
+  .description('Compare the same scenario across two Claude executables or releases')
   .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
-  .requiredOption('--baseline <path>', 'known baseline Claude executable')
-  .requiredOption('--candidate <path>', 'candidate Claude executable')
+  .option('--baseline <path>', 'known baseline Claude executable')
+  .option('--candidate <path>', 'candidate Claude executable')
+  .option('--from <version>', 'baseline Claude Code release (x.y.z, stable, latest)')
+  .option('--to <version>', 'candidate Claude Code release (x.y.z, stable, latest)')
   .option('--json', 'print JSON instead of the human report', false)
-  .action(async (scenarioPath: string, options: { baseline: string; candidate: string; json: boolean }) => {
+  .action(async (scenarioPath: string, options: { baseline?: string; candidate?: string; from?: string; to?: string; json: boolean }) => {
     const scenario = await loadScenario(scenarioPath);
-    const baseline = await runScenario(scenario, { executableOverride: options.baseline, artifactLabel: 'baseline' });
-    const candidate = await runScenario(scenario, { executableOverride: options.candidate, artifactLabel: 'candidate' });
+    let baselineExecutable = options.baseline;
+    let candidateExecutable = options.candidate;
+    let baselineLabel = 'baseline';
+    let candidateLabel = 'candidate';
+
+    if (options.from !== undefined || options.to !== undefined) {
+      if (!options.from || !options.to) throw new Error('Use --from and --to together.');
+      if (options.baseline || options.candidate) throw new Error('Use either --baseline/--candidate executables or --from/--to releases, not both.');
+      const onStatus = (message: string) => console.error(message);
+      const baselineInstall = await installClaudeVersion(options.from, { onStatus });
+      const candidateInstall = await installClaudeVersion(options.to, { onStatus });
+      baselineExecutable = baselineInstall.executablePath;
+      candidateExecutable = candidateInstall.executablePath;
+      baselineLabel = baselineInstall.version;
+      candidateLabel = candidateInstall.version;
+    }
+
+    if (!baselineExecutable || !candidateExecutable) {
+      throw new Error('Compare requires --baseline <path> and --candidate <path>, or --from <version> and --to <version>.');
+    }
+
+    const baseline = await runScenario(scenario, { executableOverride: baselineExecutable, artifactLabel: baselineLabel });
+    const candidate = await runScenario(scenario, { executableOverride: candidateExecutable, artifactLabel: candidateLabel });
     console.log(options.json ? JSON.stringify({ baseline, candidate }, null, 2) : formatComparison(baseline, candidate));
-    if (baseline.passed && !candidate.passed) process.exitCode = 1;
+    if (!candidate.passed) process.exitCode = 1;
   });
 
 program.command('bisect')
@@ -84,6 +108,39 @@ program.command('bisect')
       console.log(`${run.passed ? 'PASS' : 'FAIL'}  [${index}] ${options.commands[index]}`);
     }
     console.log(`\nFirst bad executable: [${result.firstBadIndex}] ${result.firstBadCommand}`);
+  });
+
+const versions = program.command('versions').description('Manage isolated cached Claude Code releases');
+
+versions.command('install')
+  .description('Download and checksum-verify a Claude Code release into Canary cache')
+  .argument('<version>', 'x.y.z, stable, or latest')
+  .option('--platform <id>', 'override release platform id')
+  .action(async (version: string, options: { platform?: string }) => {
+    const installed = await installClaudeVersion(version, { platform: options.platform, onStatus: (message) => console.error(message) });
+    console.log(`${installed.cached ? 'Cached' : 'Installed'} ${installed.version} (${installed.platform})\n${installed.executablePath}\nsha256 ${installed.checksum}`);
+  });
+
+versions.command('list')
+  .description('List Claude Code releases cached for this platform')
+  .option('--platform <id>', 'override release platform id')
+  .action(async (options: { platform?: string }) => {
+    const targetPlatform = options.platform ?? platformId();
+    const cached = await listCachedClaudeVersions({ platform: targetPlatform });
+    if (cached.length === 0) {
+      console.log(`No Claude Code releases cached for ${targetPlatform}.`);
+      return;
+    }
+    console.log(`Cached Claude Code releases (${targetPlatform}):`);
+    for (const version of cached) console.log(`  ${version}`);
+  });
+
+versions.command('path')
+  .description('Print the executable path for an exact cached release')
+  .argument('<version>', 'exact x.y.z version')
+  .option('--platform <id>', 'override release platform id')
+  .action(async (version: string, options: { platform?: string }) => {
+    console.log(await cachedClaudePath(version, { platform: options.platform }));
   });
 
 program.command('doctor')
