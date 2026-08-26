@@ -102,11 +102,24 @@ See [`REPRO_BUNDLES.md`](REPRO_BUNDLES.md) for the export model, exclusions and 
 
 ## v0.6 — Plugin compatibility and ecosystem
 
-- plugin discovery fixture generator
-- hooks/skills/commands/MCP smoke tests
-- multi-version compatibility matrix
-- Action performance/caching improvements
-- richer badge/reporting integrations
+- [x] `claude-canary plugin-matrix <scenario> --plugin <path>`
+- [x] newest-N, explicit-version and published-range selectors
+- [x] authenticated per-release executable reuse through the version cache
+- [x] same Git starting commit and deterministic scenario for every release
+- [x] fresh temporary plugin copy per run instead of exposing the source plugin path
+- [x] JSON compatibility artifact
+- [x] README-friendly Markdown compatibility table
+- [x] first incompatible release marker
+- [x] CI-friendly failure semantics with `--allow-incompatible` override
+- [x] bounded 50-release safety cap
+- [ ] plugin discovery fixture generator
+- [ ] first-class hooks/skills/commands/MCP smoke-test generators
+- [ ] multi-plugin compatibility suites
+- [ ] reusable GitHub Action mode for plugin matrices
+- [ ] Action performance/caching improvements
+- [ ] richer badge/reporting integrations
+
+See [`PLUGIN_COMPATIBILITY.md`](PLUGIN_COMPATIBILITY.md) for selectors, isolation behavior, artifacts and smoke-scenario guidance.
 
 ## v1.0
 
