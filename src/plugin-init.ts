@@ -135,7 +135,6 @@ async function markdownComponent(file: string, root: string, kind: 'command' | '
   const metadataDescription = typeof metadata.description === 'string' && metadata.description.trim() ? metadata.description.trim() : undefined;
   return {
     kind,
-    // Claude Code names slash commands from the Markdown filename. Agent definitions may use frontmatter names.
     name: kind === 'command' ? fileName : (metadataName ?? fileName),
     path: normalize(path.relative(root, file)),
     source,
@@ -336,7 +335,12 @@ export async function discoverPlugin(pluginPath: string): Promise<PluginDiscover
   };
 }
 
-function baseScenario(name: string, prompt: string, includeHookEvents = false): Record<string, unknown> {
+function baseScenario(
+  name: string,
+  prompt: string,
+  includeHookEvents = false,
+  claudeOutputAbsent: string[] = [],
+): Record<string, unknown> {
   return {
     version: 1,
     name,
@@ -355,6 +359,7 @@ function baseScenario(name: string, prompt: string, includeHookEvents = false): 
       files_exist: [],
       files_absent: [],
       file_contains: [],
+      claude_output_absent: claudeOutputAbsent,
     },
     limits: { max_tool_calls: 40, max_total_tokens: 80000 },
   };
@@ -365,7 +370,9 @@ function scenarioForComponent(plugin: string, component: PluginComponent): Recor
   if (component.kind === 'command') {
     return baseScenario(
       `plugin-${plugin}-command-${id}`,
-      `Smoke-test the Claude Code plugin ${plugin}. Invoke the plugin slash command /${plugin}:${component.name} with a harmless read-only help or inspection request. Do not modify repository files. If the command is unavailable or errors, stop and report the failure.`,
+      `/${plugin}:${component.name} Canary smoke test: perform a harmless read-only help or repository inspection. Do not modify repository files.`,
+      false,
+      ['Unknown command:'],
     );
   }
   if (component.kind === 'skill') {
