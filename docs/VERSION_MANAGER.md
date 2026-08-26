@@ -44,20 +44,39 @@ CC_CANARY_CACHE_DIR=/custom/cache
 The layout is:
 
 ```text
+trust/
+  claude-code.asc
 versions/
   2.1.89/
     win32-x64/
       claude.exe
       manifest.json
+      install.json
 ```
 
-## Integrity model
+`install.json` records the checksum, size, verification time, and whether the release was authenticated by a signed manifest or only by a checksum for legacy releases.
 
-Every install fetches the release's `manifest.json` and checks the downloaded binary against `platforms.<platform>.checksum` (SHA256). If the manifest publishes a byte size, Canary checks that too. A cached binary is re-hashed before reuse and replaced if it no longer matches.
+## Integrity and authenticity model
 
-This detects corruption and cache tampering. The current alpha implementation does **not yet verify the detached GPG signature on `manifest.json` itself**. Anthropic publishes those signatures for releases 2.1.89 and newer; fail-closed signature verification with the pinned Anthropic key fingerprint is the next security milestone.
+For Claude Code **2.1.89 and newer**, Canary verifies the detached `manifest.json.sig` before trusting any checksum from the manifest.
 
-Until that lands, environments requiring cryptographic publisher authentication should independently verify the manifest signature or use their own trusted binary cache.
+The verification chain is:
+
+1. fetch Anthropic's release signing key from `https://downloads.claude.ai/keys/claude-code.asc`
+2. parse the key with OpenPGP in-process; Canary never reads or modifies the user's GPG keyring
+3. require the exact pinned fingerprint `31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`
+4. verify `manifest.json.sig` against the exact downloaded manifest bytes
+5. only after that, read `platforms.<platform>.checksum`
+6. hash the downloaded Claude Code binary and require an exact SHA256 match
+7. verify the published byte size when present
+
+If the signing key fingerprint differs, the detached signature is missing, or signature verification fails, installation fails closed.
+
+Anthropic publishes detached manifest signatures starting with release **2.1.89**. Earlier releases do not have them, so Canary marks those installs explicitly as `checksum-only` instead of pretending they have publisher authentication.
+
+A cached binary is re-hashed before every reuse. The current release manifest is fetched and authenticated again, so a locally modified cached executable is rejected and replaced.
+
+The signing key is cached under Canary's own cache directory only after its fingerprint has matched the hard-coded Anthropic fingerprint. A corrupted/replaced cached key is discarded and fetched again.
 
 ## Supported platforms
 
