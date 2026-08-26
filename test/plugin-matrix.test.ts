@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { Scenario } from '../src/config.js';
 import {
   assertPluginMatrixCompatibleScenario,
+  assertPluginTreeSafe,
   formatPluginMatrixMarkdown,
   selectRecentPublishedVersions,
   validateExplicitVersions,
   type PluginMatrixResult,
 } from '../src/plugin-matrix.js';
+
+const temporaryRoots: string[] = [];
 
 function scenario(args: string[] = []): Scenario {
   return {
@@ -28,6 +34,10 @@ function scenario(args: string[] = []): Scenario {
     },
   };
 }
+
+afterEach(async () => {
+  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 describe('plugin compatibility matrix helpers', () => {
   it('selects the newest exact published releases in ascending order', () => {
@@ -51,6 +61,29 @@ describe('plugin compatibility matrix helpers', () => {
     expect(() => assertPluginMatrixCompatibleScenario(scenario(['--plugin-dir', './plugin']))).toThrow(/conflicts/i);
     expect(() => assertPluginMatrixCompatibleScenario(scenario(['--plugin-url=https://example.invalid/plugin']))).toThrow(/conflicts/i);
     expect(() => assertPluginMatrixCompatibleScenario(scenario())).not.toThrow();
+  });
+
+  it('rejects plugin trees containing symlinks', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'cc-canary-plugin-tree-'));
+    temporaryRoots.push(root);
+    const plugin = path.join(root, 'plugin');
+    await mkdir(path.join(plugin, '.claude-plugin'), { recursive: true });
+    await writeFile(path.join(plugin, '.claude-plugin', 'plugin.json'), '{"name":"safe-plugin"}\n', 'utf8');
+    await expect(assertPluginTreeSafe(plugin)).resolves.toBeUndefined();
+
+    if (process.platform !== 'win32') {
+      await writeFile(path.join(root, 'outside.txt'), 'outside\n', 'utf8');
+      await symlink(path.join(root, 'outside.txt'), path.join(plugin, 'outside-link.txt'));
+      await expect(assertPluginTreeSafe(plugin)).rejects.toThrow(/symbolic link/i);
+    }
+  });
+
+  it('rejects non-directory plugin inputs', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'cc-canary-plugin-file-'));
+    temporaryRoots.push(root);
+    const file = path.join(root, 'plugin.zip');
+    await writeFile(file, 'not a directory', 'utf8');
+    await expect(assertPluginTreeSafe(file)).rejects.toThrow(/must be a directory/i);
   });
 
   it('formats a README-friendly markdown matrix', () => {
