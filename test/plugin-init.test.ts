@@ -31,7 +31,8 @@ async function writePlugin(root: string): Promise<string> {
     hooks: { SessionStart: [{ hooks: [] }] },
     mcpServers: { demo: { command: 'node', args: ['server.js'] } },
   }), 'utf8');
-  await writeFile(path.join(plugin, 'commands', 'hello.md'), '---\nname: hello\ndescription: Say hello\n---\nHello.\n', 'utf8');
+  // Claude Code names plugin slash commands from the filename, not a name frontmatter field.
+  await writeFile(path.join(plugin, 'commands', 'hello.md'), '---\nname: ignored-frontmatter-name\ndescription: Say hello\n---\nHello.\n', 'utf8');
   await writeFile(path.join(plugin, 'custom-agents', 'reader.md'), '---\nname: reader\ndescription: Read-only repository helper\n---\nInspect only.\n', 'utf8');
   await writeFile(path.join(plugin, 'skills', 'repo-guide', 'SKILL.md'), '---\nname: Repo Guide\ndescription: Use for repository orientation\n---\nGuide the user.\n', 'utf8');
   await writeFile(path.join(plugin, 'hooks', 'hooks.json'), JSON.stringify({ Stop: [{ hooks: [] }] }), 'utf8');
@@ -47,6 +48,7 @@ describe('plugin smoke generator', () => {
 
     expect(discovery.pluginName).toBe('demo-plugin');
     expect(discovery.commands.map((entry) => entry.name)).toEqual(['hello']);
+    expect(discovery.commands[0]?.description).toBe('Say hello');
     expect(discovery.agents.map((entry) => entry.name)).toEqual(['reader']);
     expect(discovery.skills.map((entry) => entry.name)).toEqual(['Repo Guide']);
     expect(discovery.hooks.map((entry) => entry.name)).toEqual(['SessionStart', 'Stop']);
@@ -69,6 +71,12 @@ describe('plugin smoke generator', () => {
       expect(scenario.expect?.changed_files?.deny).toEqual(['**']);
     }
 
+    const command = generated.scenarios.find((entry) => entry.kind === 'command');
+    expect(command?.path).toContain('command-hello.canary.yml');
+    const commandScenario = await loadScenario(path.join(project, command!.path));
+    expect(commandScenario.prompt).toContain('/demo-plugin:hello');
+    expect(commandScenario.prompt).not.toContain('ignored-frontmatter-name');
+
     const discovery = JSON.parse(await readFile(path.join(project, generated.discoveryPath), 'utf8')) as { pluginRoot: string };
     expect(discovery.pluginRoot).not.toBe(plugin);
     expect(discovery.pluginRoot).toContain('demo-plugin');
@@ -83,6 +91,21 @@ describe('plugin smoke generator', () => {
       commands: '../outside',
     }), 'utf8');
     await expect(discoverPlugin(plugin)).rejects.toThrow(/must start with \.\//i);
+  });
+
+  it('refuses duplicate MCP server names from different plugin sources', async () => {
+    const root = await tempRoot();
+    const plugin = path.join(root, 'duplicate-mcp-plugin');
+    await mkdir(path.join(plugin, '.claude-plugin'), { recursive: true });
+    await writeFile(path.join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify({
+      name: 'duplicate-mcp-plugin',
+      mcpServers: { shared: { command: 'node', args: ['manifest.js'] } },
+    }), 'utf8');
+    await writeFile(path.join(plugin, '.mcp.json'), JSON.stringify({
+      mcpServers: { shared: { command: 'node', args: ['default.js'] } },
+    }), 'utf8');
+
+    await expect(discoverPlugin(plugin)).rejects.toThrow(/duplicate MCP server name/i);
   });
 
   it('refuses plugin trees containing symlinks', async () => {
