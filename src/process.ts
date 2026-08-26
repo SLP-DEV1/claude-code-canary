@@ -28,7 +28,7 @@ export async function spawnCapture(
       resolve({ ...result, durationMs: Date.now() - started });
     };
 
-    let child;
+    let child: ReturnType<typeof spawn>;
     try {
       child = spawn(executable, args, {
         cwd: options.cwd,
@@ -48,16 +48,16 @@ export async function spawnCapture(
       return;
     }
 
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => { stdout += chunk; });
-    child.stderr.on('data', (chunk: string) => { stderr += chunk; });
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string | Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk: string | Buffer) => { stderr += chunk.toString(); });
 
-    child.on('error', (error) => {
+    child.on('error', (error: Error) => {
       finish({ code: 127, signal: null, stdout, stderr: `${stderr}${error.message}`, timedOut });
     });
 
-    child.on('close', (code, signal) => {
+    child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
       finish({ code: code ?? 1, signal, stdout, stderr, timedOut });
     });
 
