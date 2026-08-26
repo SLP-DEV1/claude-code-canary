@@ -52,7 +52,9 @@
               "text": { "type": "string" }
             }
           }
-        }
+        },
+        "claude_output_contains": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "claude_output_absent": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       }
     },
     "limits": {
