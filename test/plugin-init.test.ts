@@ -78,8 +78,9 @@ describe('plugin smoke generator', () => {
     const command = generated.scenarios.find((entry) => entry.kind === 'command');
     expect(command?.path).toContain('command-hello.canary.yml');
     const commandScenario = await loadScenario(path.join(project, command!.path));
-    expect(commandScenario.prompt).toContain('/demo-plugin:hello');
+    expect(commandScenario.prompt).toMatch(/^\/demo-plugin:hello\b/);
     expect(commandScenario.prompt).not.toContain('ignored-frontmatter-name');
+    expect(commandScenario.expect?.claude_output_absent).toEqual(['Unknown command:']);
 
     const discovery = JSON.parse(await readFile(path.join(project, generated.discoveryPath), 'utf8')) as { pluginRoot: string };
     expect(discovery.pluginRoot).not.toBe(plugin);
