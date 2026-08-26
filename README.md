@@ -7,7 +7,7 @@
 
 Claude Code Canary is an open-source regression harness for Claude Code. It runs the same coding scenario in isolated Git worktrees, records deterministic outcomes and agent metrics, and compares Claude Code versions/configurations side by side.
 
-> Status: **early MVP / v0.1 development**. The core runner is usable, but interfaces may still change.
+> Status: **pre-1.0 development**. The core workflows are usable, but interfaces may still change before the stable scenario/reporting API.
 
 ## Why Canary?
 
@@ -27,6 +27,7 @@ Canary turns those questions into repeatable tests.
 - `claude-canary validate` — validate YAML before spending tokens
 - `claude-canary record` / `save` — turn one real Claude task into a reviewable regression scenario
 - `claude-canary replay` — replay a recorded scenario from its exact original Git commit
+- `claude-canary repro` — export a failed run as a privacy-first, reviewable bug-reproduction bundle
 - `claude-canary run` — run one scenario in a disposable Git worktree
 - `claude-canary compare` — compare two executables **or two release versions**
 - `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
@@ -93,6 +94,39 @@ Recorded scenarios include allow **and require** changed-file assertions, create
 The generated assertions are intentionally editable candidates, not a claim that the diff alone proves semantic correctness. Add or strengthen deterministic verification commands and content assertions after recording when useful.
 
 See [`docs/RECORD_REPLAY.md`](docs/RECORD_REPLAY.md) for the full workflow, privacy model and current limitations.
+
+## Export a failed run as a bug reproduction
+
+After a Canary run fails, turn its result artifact into a compact reproduction directory:
+
+```bash
+claude-canary repro .canary/results/failed.json
+```
+
+Canary resolves the exact recorded/base Git commit and creates a bundle similar to:
+
+```text
+.canary/repro/auth-fix-01234567/
+├── README.md
+├── scenario.canary.yml
+├── result.json
+├── environment.json
+├── fixture-manifest.json
+├── issue-report.md
+├── reproduce.sh
+├── reproduce.ps1
+└── fixture/
+```
+
+The fixture is derived from deterministic scenario scope instead of copying the whole repository. Canary excludes known credential files, dependency/build/cache directories, symlinks and binaries; exported text is scanned for common secret shapes and machine-specific absolute paths. Raw model transcripts and environment-variable values are not included.
+
+The generated `issue-report.md` summarizes deterministic failures, versions, changed files and one-command reproduction steps. `reproduce.sh` and `reproduce.ps1` create a local Git baseline in the fixture and run the bundled Canary scenario.
+
+`--force` is intentionally conservative: Canary only replaces an existing directory when it carries Canary's repro-bundle marker. It will not recursively delete an arbitrary user directory that merely matches `--output`.
+
+**Always inspect the complete generated bundle before publishing it.** Generic redaction cannot know which project-specific source code, customer names or business logic are confidential.
+
+See [`docs/REPRO_BUNDLES.md`](docs/REPRO_BUNDLES.md) for the fixture-selection rules, exclusions, threat model and publishing checklist.
 
 ## GitHub Action
 
@@ -308,6 +342,8 @@ For untrusted repositories or aggressive permission settings, run Canary inside 
 
 The version cache authenticates signed manifests for Claude Code 2.1.89+ with Anthropic's pinned release-signing fingerprint, then verifies binary SHA256 and size. Pre-2.1.89 releases are explicitly reported as checksum-only.
 
+Reproduction bundles add a second publishing-safety boundary: minimal deterministic fixture selection, hard exclusions, bounded text-only copying, redaction and a final high-risk path audit. This reduces accidental leakage, but manual review is still required before sharing a bundle.
+
 ## Result artifacts
 
 Each run writes a JSON result under:
@@ -326,7 +362,7 @@ Configuration experiments additionally write an aggregate `*-experiment.json` ar
 2. **v0.2 — version intelligence**: signed isolated historical binaries + automatic published-release bisect
 3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
 4. **v0.4 — record/replay**: core recording + exact-commit replay shipped; one-command capture and smarter assertion suggestions next
-5. **v0.5 — repro bundles**: export a minimal redacted bug reproduction
+5. **v0.5 — repro bundles**: privacy-first minimal fixture export, launchers and issue report shipped
 6. **v0.6 — ecosystem**: plugin compatibility matrix, Action refinements and badge/reporting integrations
 7. **v1.0 — stable scenario schema and reporter API**
 
