@@ -38,6 +38,20 @@ claude-canary plugin-suite \
   --last 10
 ```
 
+## Freshness and coverage guards
+
+Before any Claude run starts, `plugin-suite` compares the suite's `discovery.json` with the plugin's current discovered surface. If a command, agent, skill, hook or MCP server was added, removed, renamed or moved after the suite was generated, Canary refuses the run instead of testing stale coverage.
+
+Canary also verifies that every scenario expected from the current plugin surface is still present. Deleting `command-review.canary.yml`, for example, cannot silently make a failing command disappear from an otherwise green suite. Extra custom `*.canary.yml` scenarios are allowed and run after the generated component scenarios.
+
+When either guard fails, regenerate the suite and review the resulting YAML again:
+
+```bash
+claude-canary plugin-init ./my-plugin --force
+```
+
+For a custom suite destination, regenerate to the same path with `--output` and pass that path back to `plugin-suite --suite`.
+
 ## Release selectors
 
 The suite uses the same selectors as `plugin-matrix`:
@@ -159,7 +173,8 @@ This keeps the broad release gate and the focused debugging workflow separate wh
 - Every scenario/release run starts from the same repository commit through Canary's detached-worktree runner.
 - The plugin is copied to a fresh temporary runtime directory for each underlying run.
 - Plugin trees and generated suite scenario files must not be symlinks.
-- The suite directory must carry the Canary `plugin-init` marker.
+- The suite directory must carry the Canary `plugin-init` marker and a matching current `discovery.json`.
+- Missing generated component scenarios are rejected; additional custom scenarios are allowed.
 - Generated smoke scenarios are scaffolds. Review them before treating the suite as proof of every domain-specific plugin contract.
 - A release is marked compatible only when every scenario in the suite passes on that release.
 - `firstIncompatibleVersion` is the earliest failed release in the selected set, not a monotonic binary-search proof. Use `bisect` for a known-good/known-bad regression boundary.
