@@ -112,14 +112,17 @@ See [`REPRO_BUNDLES.md`](REPRO_BUNDLES.md) for the export model, exclusions and 
 - [x] first incompatible release marker
 - [x] CI-friendly failure semantics with `--allow-incompatible` override
 - [x] bounded 50-release safety cap
-- [ ] plugin discovery fixture generator
-- [ ] first-class hooks/skills/commands/MCP smoke-test generators
+- [x] `claude-canary plugin-init <plugin-dir>` discovery fixture generator
+- [x] commands/agents/skills/hooks/MCP smoke-test scenario generation
+- [x] default + manifest custom-path discovery
+- [x] inline hook/MCP discovery and frontmatter metadata extraction
+- [x] symlink-safe generator isolation and marker-protected `--force`
 - [ ] multi-plugin compatibility suites
 - [ ] reusable GitHub Action mode for plugin matrices
 - [ ] Action performance/caching improvements
 - [ ] richer badge/reporting integrations
 
-See [`PLUGIN_COMPATIBILITY.md`](PLUGIN_COMPATIBILITY.md) for selectors, isolation behavior, artifacts and smoke-scenario guidance.
+See [`PLUGIN_COMPATIBILITY.md`](PLUGIN_COMPATIBILITY.md) for selectors, isolation behavior and compatibility artifacts. See [`PLUGIN_SMOKE_GENERATOR.md`](PLUGIN_SMOKE_GENERATOR.md) for plugin discovery and generated smoke suites.
 
 ## v1.0
 
