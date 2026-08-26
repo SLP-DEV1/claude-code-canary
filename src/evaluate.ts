@@ -31,6 +31,12 @@ export async function evaluateExpectations(
     }
   }
 
+  for (const pattern of expected?.changed_files?.require ?? []) {
+    if (!changedFiles.some((file) => minimatch(file, pattern, { dot: true }))) {
+      failures.push(`Required changed file missing: ${pattern}`);
+    }
+  }
+
   for (const pattern of expected?.changed_files?.deny ?? []) {
     for (const file of changedFiles) {
       if (minimatch(file, pattern, { dot: true })) failures.push(`Forbidden file changed: ${file} (matched ${pattern})`);
