@@ -128,10 +128,14 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       });
 
       if (claudeResult.timedOut) failures.push(`Claude timed out after ${scenario.claude.timeout_seconds}s`);
+      if (claudeResult.outputTruncated) failures.push('Claude output exceeded Canary\'s 16 MiB capture limit; refusing to evaluate incomplete stream-json output.');
       if (claudeResult.code !== 0) failures.push(`Claude exited with code ${claudeResult.code}`);
     }
 
     const metrics = parseStreamMetrics(claudeResult.stdout);
+    if (setupOk && metrics.parseErrors > 0) {
+      failures.push(`Claude stream-json contained ${metrics.parseErrors} malformed non-empty line${metrics.parseErrors === 1 ? '' : 's'}; metrics and assertions would be unreliable.`);
+    }
 
     if (setupOk) {
       for (const command of scenario.verify?.commands ?? []) {
