@@ -25,6 +25,8 @@ Canary turns those questions into repeatable tests.
 
 - `claude-canary init` — create a scenario file
 - `claude-canary validate` — validate YAML before spending tokens
+- `claude-canary record` / `save` — turn one real Claude task into a reviewable regression scenario
+- `claude-canary replay` — replay a recorded scenario from its exact original Git commit
 - `claude-canary run` — run one scenario in a disposable Git worktree
 - `claude-canary compare` — compare two executables **or two release versions**
 - `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
@@ -35,7 +37,7 @@ Canary turns those questions into repeatable tests.
 - `claude-canary doctor` — check Git, Claude and repository readiness
 - reusable **Claude Canary GitHub Action** with Step Summary and JSON artifact upload
 - deterministic verification commands
-- changed-file allow/deny rules
+- changed-file allow / require / deny rules
 - expected/forbidden file and content assertions
 - max tool-call / token / cost limits
 - `stream-json` capture with tool-use and usage metrics
@@ -60,6 +62,37 @@ claude-canary run .canary/basic.canary.yml
 ```
 
 Canary deliberately uses Claude Code's documented non-interactive CLI (`claude -p`) and `stream-json` output instead of scraping the interactive terminal UI.
+
+## Record a real Claude Code task
+
+Start from a completely clean repository and tell Canary what task you are about to perform:
+
+```bash
+claude-canary record auth-fix \
+  --prompt "Fix the failing authentication test without changing the public API" \
+  --setup "npm ci" \
+  --verify "npm test"
+```
+
+Then use Claude Code normally. When the result is good, save it **before committing or changing branches**:
+
+```bash
+claude-canary save auth-fix
+```
+
+Canary learns the changed-file set and generates a reviewable scenario under `.canary/`. Pending recording state lives under `.git/cc-canary/recordings/`, so the recorder itself never pollutes the Git diff.
+
+Replay the task later from the exact original starting commit:
+
+```bash
+claude-canary replay .canary/auth-fix.canary.yml
+```
+
+Recorded scenarios include allow **and require** changed-file assertions, created/deleted-file expectations, the original commit and non-secret Claude/config metadata. Canary does not persist raw environment values or Claude session transcripts. Common credential patterns and absolute machine paths are redacted from stored prompts; setup/verification commands that appear secret-bearing or machine-specific are rejected rather than silently persisted.
+
+The generated assertions are intentionally editable candidates, not a claim that the diff alone proves semantic correctness. Add or strengthen deterministic verification commands and content assertions after recording when useful.
+
+See [`docs/RECORD_REPLAY.md`](docs/RECORD_REPLAY.md) for the full workflow, privacy model and current limitations.
 
 ## GitHub Action
 
@@ -209,6 +242,8 @@ expect:
     allow:
       - src/auth/**
       - test/auth/**
+    require:
+      - src/auth/**
     deny:
       - package-lock.json
   files_exist:
@@ -290,7 +325,7 @@ Configuration experiments additionally write an aggregate `*-experiment.json` ar
 1. **v0.1 — deterministic harness**: run, compare, bisect, metrics, CI, GitHub Action
 2. **v0.2 — version intelligence**: signed isolated historical binaries + automatic published-release bisect
 3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
-4. **v0.4 — record/replay**: turn a real Claude task into a reusable regression scenario
+4. **v0.4 — record/replay**: core recording + exact-commit replay shipped; one-command capture and smarter assertion suggestions next
 5. **v0.5 — repro bundles**: export a minimal redacted bug reproduction
 6. **v0.6 — ecosystem**: plugin compatibility matrix, Action refinements and badge/reporting integrations
 7. **v1.0 — stable scenario schema and reporter API**
