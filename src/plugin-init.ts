@@ -130,11 +130,13 @@ function frontmatter(text: string, file: string): Record<string, unknown> {
 async function markdownComponent(file: string, root: string, kind: 'command' | 'agent', source: 'default' | 'manifest'): Promise<PluginComponent> {
   const text = await readFile(file, 'utf8');
   const metadata = frontmatter(text, normalize(path.relative(root, file)));
+  const fileName = path.basename(file, path.extname(file));
   const metadataName = typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : undefined;
   const metadataDescription = typeof metadata.description === 'string' && metadata.description.trim() ? metadata.description.trim() : undefined;
   return {
     kind,
-    name: metadataName ?? path.basename(file, path.extname(file)),
+    // Claude Code names slash commands from the Markdown filename. Agent definitions may use frontmatter names.
+    name: kind === 'command' ? fileName : (metadataName ?? fileName),
     path: normalize(path.relative(root, file)),
     source,
     description: metadataDescription,
@@ -247,12 +249,20 @@ function mcpComponents(config: Record<string, unknown>, sourcePath: string, sour
   return Object.keys(mcpServerMap(config)).sort().map((name) => ({ kind: 'mcp', name, path: sourcePath, source }));
 }
 
+function addMcpComponent(found: Map<string, PluginComponent>, component: PluginComponent): void {
+  const existing = found.get(component.name);
+  if (existing && existing.path !== component.path) {
+    throw new Error(`Duplicate MCP server name discovered across plugin sources: ${component.name} (${existing.path}, ${component.path}).`);
+  }
+  if (!existing) found.set(component.name, component);
+}
+
 async function collectMcp(root: string, manifest: PluginManifest): Promise<PluginComponent[]> {
   const found = new Map<string, PluginComponent>();
   const defaultFile = path.join(root, '.mcp.json');
   if (await exists(defaultFile)) {
     for (const component of mcpComponents(await parseJsonFile(defaultFile, root), '.mcp.json', 'default')) {
-      found.set(component.name, component);
+      addMcpComponent(found, component);
     }
   }
 
@@ -260,13 +270,13 @@ async function collectMcp(root: string, manifest: PluginManifest): Promise<Plugi
     const relative = validateManifestPath(manifest.mcpServers, 'mcpServers');
     const file = path.join(root, relative);
     if (!await exists(file)) throw new Error(`plugin.json mcpServers path does not exist: ./${normalize(relative)}`);
-    for (const component of mcpComponents(await parseJsonFile(file, root), normalize(relative), 'manifest')) found.set(component.name, component);
+    for (const component of mcpComponents(await parseJsonFile(file, root), normalize(relative), 'manifest')) addMcpComponent(found, component);
   } else if (manifest.mcpServers !== undefined) {
     if (typeof manifest.mcpServers !== 'object' || manifest.mcpServers === null || Array.isArray(manifest.mcpServers)) {
       throw new Error('plugin.json mcpServers must be a ./ path or inline object.');
     }
     for (const component of mcpComponents(manifest.mcpServers as Record<string, unknown>, '.claude-plugin/plugin.json#mcpServers', 'manifest')) {
-      found.set(component.name, component);
+      addMcpComponent(found, component);
     }
   }
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -408,12 +418,14 @@ export async function generatePluginScenarios(pluginPath: string, options: Plugi
   await writeFile(discoveryPath, `${JSON.stringify(portableDiscovery, null, 2)}\n`, 'utf8');
 
   const scenarios: GeneratedPluginScenario[] = [];
+  const usedScenarioNames = new Set<string>();
   const loadPath = path.join(outputDir, scenarioFile('load'));
   await writeFile(loadPath, YAML.stringify(baseScenario(
     `plugin-${discovery.pluginName}-load`,
     `Smoke-test loading the Claude Code plugin ${discovery.pluginName}. Confirm the plugin loads without startup errors and summarize the available plugin components. Do not modify repository files.`,
     discovery.hooks.length > 0,
   )), 'utf8');
+  usedScenarioNames.add(path.basename(loadPath));
   scenarios.push({ kind: 'load', path: normalize(path.relative(cwd, loadPath)) });
 
   const groups: Array<[PluginComponentKind, PluginComponent[]]> = [
@@ -425,7 +437,12 @@ export async function generatePluginScenarios(pluginPath: string, options: Plugi
   ];
   for (const [kind, components] of groups) {
     for (const component of components) {
-      const file = path.join(outputDir, scenarioFile(kind, component.name));
+      const filename = scenarioFile(kind, component.name);
+      if (usedScenarioNames.has(filename)) {
+        throw new Error(`Generated scenario filename collision for ${kind} ${JSON.stringify(component.name)}: ${filename}`);
+      }
+      usedScenarioNames.add(filename);
+      const file = path.join(outputDir, filename);
       await writeFile(file, YAML.stringify(scenarioForComponent(discovery.pluginName, component)), 'utf8');
       scenarios.push({ kind, component: component.name, path: normalize(path.relative(cwd, file)) });
     }
