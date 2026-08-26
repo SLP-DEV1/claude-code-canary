@@ -24,8 +24,10 @@ Canary turns those questions into repeatable tests.
 - `cc-canary validate` — validate YAML before spending tokens
 - `cc-canary run` — run one scenario in a disposable Git worktree
 - `cc-canary compare` — compare two executables **or two release versions**
-- `cc-canary bisect` — binary-search an ordered list of Claude executables/wrappers for the first bad one
+- `cc-canary bisect --good <version> --bad <version>` — automatically find the first bad published Claude Code release
+- `cc-canary bisect --commands ...` — binary-search custom Claude executables/wrappers
 - `cc-canary versions install|list|path` — isolated historical Claude Code cache
+- signed-manifest authentication for Claude Code 2.1.89+
 - `cc-canary doctor` — check Git, Claude and repository readiness
 - deterministic verification commands
 - changed-file allow/deny rules
@@ -56,7 +58,9 @@ Canary deliberately uses Claude Code's documented non-interactive CLI (`claude -
 
 ## Compare actual Claude Code releases
 
-Canary can keep multiple native Claude Code binaries in its own cache. It resolves exact versions or the `stable` / `latest` channels from Anthropic's official release distribution, downloads the platform binary and verifies its SHA256 checksum against that release's `manifest.json`.
+Canary can keep multiple native Claude Code binaries in its own cache. It resolves exact versions or the `stable` / `latest` channels from Anthropic's official release distribution.
+
+For Claude Code 2.1.89 and newer, Canary verifies Anthropic's detached release-manifest signature against a hard-pinned signing-key fingerprint **before** trusting the binary checksum. Older releases are clearly marked `checksum-only` because Anthropic did not publish detached manifest signatures for them.
 
 ```bash
 cc-canary versions install 2.1.89
@@ -69,7 +73,42 @@ cc-canary compare .canary/basic.canary.yml \
 
 Missing versions are cached automatically. Canary **does not replace or downgrade your normal `claude` installation**.
 
-See [`docs/VERSION_MANAGER.md`](docs/VERSION_MANAGER.md) for cache layout and the current integrity model.
+See [`docs/VERSION_MANAGER.md`](docs/VERSION_MANAGER.md) for the cache layout and trust model.
+
+## Find the first bad Claude Code release
+
+This is Canary's high-signal regression workflow. Give it one known-good and one known-bad published Claude Code release:
+
+```bash
+cc-canary bisect .canary/basic.canary.yml \
+  --good 2.1.220 \
+  --bad 2.1.237
+```
+
+Canary:
+
+1. reads the actual published Claude Code version catalog, including release-number gaps
+2. verifies that the good and bad endpoints really exist
+3. installs/authenticates only the releases needed by binary search
+4. runs the same scenario from the same repository state
+5. reports the first published release that fails
+
+Example:
+
+```text
+Claude Code Canary — release bisect
+
+PASS  2.1.220
+FAIL  2.1.237
+PASS  2.1.228
+FAIL  2.1.233
+PASS  2.1.231
+FAIL  2.1.232
+
+First bad release: 2.1.232
+```
+
+It does **not** run every intermediate release. The search is logarithmic, so a range containing dozens of releases typically needs only a handful of actual Claude runs.
 
 ## Scenario format
 
@@ -144,9 +183,9 @@ Duration               2m 13s       2m 41s
 Candidate regression detected.
 ```
 
-## Find the first bad build
+## Bisect custom executables
 
-If you already have ordered Claude executables/wrappers:
+If you have custom Claude wrappers/builds rather than published release numbers:
 
 ```bash
 cc-canary bisect .canary/basic.canary.yml --commands \
@@ -156,7 +195,7 @@ cc-canary bisect .canary/basic.canary.yml --commands \
   ./claude-bad
 ```
 
-Canary verifies the first command is good and the last is bad, then binary-searches the range. Automatic release-number range discovery is next on the roadmap.
+Canary verifies the first command is good and the last is bad, then binary-searches that ordered list.
 
 ## Safety model
 
@@ -164,7 +203,7 @@ Canary isolates **files**, not your whole machine. Each run uses a disposable de
 
 For untrusted repositories or aggressive permission settings, run Canary inside a container/VM. Canary defaults to conservative behavior and never enables `bypassPermissions` for you.
 
-The version cache verifies downloaded binaries against release SHA256 checksums. Detached GPG verification of Anthropic's signed manifest is the next version-manager security milestone; see the version-manager documentation for details.
+The version cache authenticates signed manifests for Claude Code 2.1.89+ with Anthropic's pinned release-signing fingerprint, then verifies binary SHA256 and size. Pre-2.1.89 releases are explicitly reported as checksum-only.
 
 ## Result artifacts
 
@@ -179,7 +218,7 @@ The artifact contains pass/fail, assertion failures, Claude exit status, changed
 ## Roadmap
 
 1. **v0.1 — deterministic harness**: run, compare, bisect, metrics, CI
-2. **v0.2 — version manager**: isolated checksum-verified historical Claude binaries (in progress)
+2. **v0.2 — version intelligence**: signed isolated historical binaries + automatic published-release bisect
 3. **v0.3 — config experiments**: A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configs
 4. **v0.4 — record/replay**: turn a real Claude task into a reusable regression scenario
 5. **v0.5 — repro bundles**: export a minimal redacted bug reproduction
