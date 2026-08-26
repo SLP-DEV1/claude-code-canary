@@ -6,9 +6,17 @@ The project follows Semantic Versioning once the public CLI/schema reaches a sta
 
 ## [Unreleased]
 
+### Added
+
+- isolated Claude Code release cache backed by official versioned release endpoints
+- SHA256 and published-size verification for downloaded and cached binaries
+- `cc-canary versions install|list|path`
+- `cc-canary compare --from <version> --to <version>` with automatic caching
+
 ### Planned
 
-- safe historical Claude Code version manager and cache
+- detached GPG manifest-signature verification with pinned Anthropic fingerprint
+- release-range discovery for version-number bisect
 - `CLAUDE.md` / settings / plugin / MCP A/B experiments
 - record-to-scenario workflow
 - minimal redacted repro bundles

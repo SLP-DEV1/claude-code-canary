@@ -22,19 +22,22 @@ Claude Code Canary aims to become the compatibility and regression layer for ser
 
 ## v0.2 — Claude Code version manager
 
-Goal: make this work without users manually maintaining old binaries.
+Goal: make comparisons work without users manually maintaining old binaries or replacing their system Claude installation.
 
-- discover installed/current Claude Code version
-- resolve release metadata from official sources
-- cache versioned binaries safely
-- verify checksums/signatures where available
-- Windows, macOS and Linux support
-- `cc-canary versions list`
-- `cc-canary versions install <version>`
-- `cc-canary compare --from <version> --to <version>`
-- `cc-canary bisect --good <version> --bad <version>`
+- [x] resolve exact, `stable` and `latest` releases from official distribution endpoints
+- [x] isolated per-version/per-platform binary cache
+- [x] verify SHA256 checksum and published file size before accepting a binary
+- [x] re-verify cached binary before reuse
+- [x] Windows, macOS, Linux and musl platform mapping
+- [x] `cc-canary versions list`
+- [x] `cc-canary versions install <version>`
+- [x] `cc-canary versions path <version>`
+- [x] `cc-canary compare --from <version> --to <version>`
+- [ ] verify detached manifest GPG signatures with pinned Anthropic fingerprint
+- [ ] release-range discovery for `cc-canary bisect --good <version> --bad <version>`
+- [ ] resumable downloads and cache pruning
 
-The version manager must not depend on the deprecated global npm installation path.
+The manager intentionally avoids the deprecated global npm installation path and never rewrites the user's normal Claude binary/symlink.
 
 ## v0.3 — Configuration experiments
 
