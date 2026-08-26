@@ -70,7 +70,7 @@ describe('reproduction bundle safety', () => {
     expect(roots).not.toContain('src');
   });
 
-  it('exports a minimal redacted bundle from the exact base commit', async () => {
+  it('exports a minimal redacted bundle from the exact base commit and force-replaces only marked bundles', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'cc-canary-repro-test-'));
     temporaryRoots.push(repo);
     git(repo, 'init', '-q');
@@ -171,6 +171,7 @@ describe('reproduction bundle safety', () => {
     expect(await fileExists(path.join(output, 'fixture', '.env'))).toBe(false);
     expect(await fileExists(path.join(output, 'reproduce.sh'))).toBe(true);
     expect(await fileExists(path.join(output, 'reproduce.ps1'))).toBe(true);
+    expect(await fileExists(path.join(output, '.claude-canary-repro.json'))).toBe(true);
 
     const exportedScenario = await readFile(path.join(output, 'scenario.canary.yml'), 'utf8');
     expect(exportedScenario).not.toContain('sk-abcdefghijklmnopqrstuvwxyz123456');
@@ -193,5 +194,23 @@ describe('reproduction bundle safety', () => {
     expect(issueReport).toContain('./reproduce.sh');
     expect(issueReport).not.toContain('sk-abcdefghijklmnopqrstuvwxyz123456');
     expect(issueReport).not.toContain('/home/alice');
+
+    await expect(createReproBundle('.canary/results/failed.json', {
+      cwd: repo,
+      scenarioPath: '.canary/auth-repro.canary.yml',
+      output,
+      force: true,
+    })).resolves.toMatchObject({ outputPath: output, baseCommit });
+
+    const unrelated = path.join(repo, 'do-not-delete');
+    await mkdir(unrelated, { recursive: true });
+    await writeFile(path.join(unrelated, 'keep.txt'), 'important\n', 'utf8');
+    await expect(createReproBundle('.canary/results/failed.json', {
+      cwd: repo,
+      scenarioPath: '.canary/auth-repro.canary.yml',
+      output: unrelated,
+      force: true,
+    })).rejects.toThrow(/not marked as a Claude Code Canary repro bundle/i);
+    expect(await readFile(path.join(unrelated, 'keep.txt'), 'utf8')).toBe('important\n');
   });
 });
