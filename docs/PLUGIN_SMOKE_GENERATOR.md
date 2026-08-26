@@ -35,6 +35,8 @@ It reads `.claude-plugin/plugin.json`, then discovers:
 
 Command names come from their Markdown filenames, matching Claude Code's slash-command semantics; command frontmatter contributes metadata such as `description`. Agent and skill names/descriptions use frontmatter where supported and fall back to their filenames/directories.
 
+Plugin hook files are accepted in both the wrapped plugin form (`{"hooks": {...}}`) and direct event-map form. Metadata such as a top-level `description` is not mistaken for a hook event.
+
 Custom manifest paths must follow Claude Code's portable plugin rules: they must start with `./`, remain inside the plugin root, use forward slashes and must not contain `..` traversal.
 
 If the same MCP server name is defined by two different plugin sources, Canary fails discovery instead of silently choosing one. This mirrors Claude Code's conflict-oriented plugin loading model and keeps generated suites deterministic.
@@ -43,7 +45,23 @@ If the same MCP server name is defined by two different plugin sources, Canary f
 
 Every suite contains a plugin-load scenario plus one scenario for every discovered component.
 
-Command scenarios ask Claude Code to invoke the namespaced plugin slash command with a harmless read-only request. Agent and skill scenarios use small read-only tasks designed to exercise discovery/activation. Hook scenarios enable hook-event streaming and create a harmless session in which the hook can load or fire when applicable. MCP scenarios ask for connection/tool discovery and only permit clearly read-only operations.
+Command scenarios dispatch the namespaced plugin command directly through Claude Code print mode. For example, a plugin named `my-plugin` with `commands/review.md` produces a prompt beginning with:
+
+```text
+/my-plugin:review Canary smoke test: ...
+```
+
+The generated scenario also includes:
+
+```yaml
+expect:
+  claude_output_absent:
+    - "Unknown command:"
+```
+
+That guard matters because some Claude Code command-resolution failures can print `Unknown command` while still returning exit code 0. Canary checks the combined Claude stdout/stderr in memory, but does not persist raw model/process output into the normal result artifact.
+
+Agent and skill scenarios use small read-only tasks designed to exercise discovery/activation. Hook scenarios enable hook-event streaming and create a harmless session in which the hook can load or fire when applicable. MCP scenarios ask for connection/tool discovery and only permit clearly read-only operations.
 
 Generated scenarios deny repository changes by default:
 
@@ -57,6 +75,20 @@ expect:
 ```
 
 They are deliberately conservative starting points. Plugin behavior varies, especially for commands that require specific arguments, hooks with narrow tool matchers, and MCP servers whose useful smoke operation is domain-specific. Review the generated prompt before making it a release gate.
+
+## Claude output assertions
+
+`plugin-init` uses Canary's generic process-output assertions, which are also available in hand-written scenarios:
+
+```yaml
+expect:
+  claude_output_contains:
+    - "EXPECTED_MARKER"
+  claude_output_absent:
+    - "Unknown command:"
+```
+
+Both stdout and stderr from the Claude process are inspected. The assertions are substring checks and should use stable, specific markers rather than broad natural-language phrases.
 
 ## Run against Claude Code releases
 
