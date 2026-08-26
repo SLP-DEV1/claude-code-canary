@@ -6,7 +6,9 @@ import type { PluginDiscovery } from '../src/plugin-init.js';
 import type { PluginMatrixResult } from '../src/plugin-matrix.js';
 import {
   aggregatePluginSuiteMatrices,
+  assertGeneratedPluginSuiteCoverage,
   assertGeneratedPluginSuiteFresh,
+  expectedGeneratedPluginSuiteScenarioIds,
   formatPluginSuiteMarkdown,
   loadGeneratedPluginSuite,
   runPluginSuite,
@@ -142,6 +144,18 @@ describe('plugin compatibility suites', () => {
 
     await writeDiscoveryFile(suite, { ...live, pluginName: 'other-plugin' });
     await expect(assertGeneratedPluginSuiteFresh(suite, live)).rejects.toThrow(/belongs to plugin other-plugin/i);
+  });
+
+  it('requires every generated component scenario while allowing custom extras', () => {
+    const live = discovery('/tmp/demo');
+    expect(expectedGeneratedPluginSuiteScenarioIds(live)).toEqual(['load', 'command-hello']);
+
+    const load = suiteScenario('load', 'load');
+    expect(() => assertGeneratedPluginSuiteCoverage([load], live)).toThrow(/missing 1 expected scenario.*command-hello/i);
+
+    const command = suiteScenario('command-hello', 'command');
+    const custom = suiteScenario('custom-extra', 'custom');
+    expect(() => assertGeneratedPluginSuiteCoverage([load, command, custom], live)).not.toThrow();
   });
 
   it('aggregates a full release-by-scenario compatibility matrix', () => {
