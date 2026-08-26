@@ -10,17 +10,26 @@ The project follows Semantic Versioning once the public CLI/schema reaches a sta
 
 - isolated Claude Code release cache backed by official versioned release endpoints
 - SHA256 and published-size verification for downloaded and cached binaries
-- `cc-canary versions install|list|path`
-- `cc-canary compare --from <version> --to <version>` with automatic caching
+- detached manifest-signature verification for signed Claude Code releases
+- `claude-canary versions install|list|path`
+- `claude-canary compare --from <version> --to <version>` with automatic caching
+- reusable `Claude Canary` GitHub Action
+- GitHub Actions Step Summary with comparison output
+- automatic JSON result-artifact upload from the Action
+- README/status-badge integration documentation and copy-ready workflow example
+
+### Changed
+
+- renamed the public CLI from `cc-canary` to `claude-canary`
 
 ### Planned
 
-- detached GPG manifest-signature verification with pinned Anthropic fingerprint
 - release-range discovery for version-number bisect
 - `CLAUDE.md` / settings / plugin / MCP A/B experiments
 - record-to-scenario workflow
 - minimal redacted repro bundles
-- plugin compatibility matrix and reusable GitHub Action
+- plugin compatibility matrix
+- Action caching and richer reporting integrations
 
 ## [0.1.0] - 2026-08-26
 
@@ -34,11 +43,11 @@ The project follows Semantic Versioning once the public CLI/schema reaches a sta
 - file existence and content assertions
 - tool-call, token, cost, duration and hook-event metrics
 - JSON result artifacts
-- `cc-canary init`
-- `cc-canary validate`
-- `cc-canary run`
-- `cc-canary compare`
-- `cc-canary bisect`
-- `cc-canary doctor`
+- original `cc-canary init`
+- original `cc-canary validate`
+- original `cc-canary run`
+- original `cc-canary compare`
+- original `cc-canary bisect`
+- original `cc-canary doctor`
 - Node 20/22/24 CI matrix
 - contribution, security and roadmap documentation
