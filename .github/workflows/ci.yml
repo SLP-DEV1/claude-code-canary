@@ -29,4 +29,5 @@ jobs:
         run: |
           node dist/index.js --help | grep -q "Usage: claude-canary"
           node dist/index.js plugin-init --help | grep -q "generate smoke-test scenarios"
+          node dist/index.js plugin-suite --help | grep -q "Run every generated plugin smoke scenario"
           node dist/index.js plugin-matrix --help | grep -q "Test one Claude Code plugin"
