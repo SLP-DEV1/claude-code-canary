@@ -8,6 +8,7 @@ import { formatDoctor, runDoctor } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
 import { generatePluginScenarios } from './plugin-init.js';
 import { formatPluginMatrixMarkdown, runPluginMatrix } from './plugin-matrix.js';
+import { formatPluginSuiteMarkdown, runPluginSuite } from './plugin-suite.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
 import { createReproBundle } from './repro.js';
@@ -266,7 +267,57 @@ program.command('plugin-init')
       for (const warning of result.discovery.warnings) console.log(`  - ${warning}`);
     }
     console.log(`\nDiscovery: ${result.discoveryPath}`);
-    console.log(`Next: claude-canary plugin-matrix ${result.scenarios[0]?.path ?? '<scenario>'} --plugin ${pluginPath} --last 10`);
+    console.log(`Next: claude-canary plugin-suite --plugin ${pluginPath} --last 10`);
+  });
+
+program.command('plugin-suite')
+  .description('Run every generated plugin smoke scenario across Claude Code releases')
+  .requiredOption('--plugin <path>', 'plugin directory')
+  .option('--suite <dir>', 'generated suite directory (default: .canary/plugins/<plugin-name>)')
+  .option('--versions <versions...>', 'exact Claude Code releases to test')
+  .option('--from <version>', 'oldest exact published release to test')
+  .option('--to <version>', 'newest exact published release to test')
+  .option('--last <count>', 'test the newest N published releases')
+  .option('--platform <id>', 'override release platform id')
+  .option('--max-runs <count>', 'maximum scenario × release runs before refusing', '200')
+  .option('--json', 'print JSON instead of Markdown', false)
+  .option('--allow-incompatible', 'do not fail when any scenario/release combination is incompatible', false)
+  .action(async (options: {
+    plugin: string;
+    suite?: string;
+    versions?: string[];
+    from?: string;
+    to?: string;
+    last?: string;
+    platform?: string;
+    maxRuns: string;
+    json: boolean;
+    allowIncompatible: boolean;
+  }) => {
+    const last = options.last === undefined ? undefined : Number(options.last);
+    if (options.last !== undefined && (!Number.isInteger(last) || (last ?? 0) < 1)) {
+      throw new Error('--last must be a positive integer.');
+    }
+    const maxRuns = Number(options.maxRuns);
+    if (!Number.isInteger(maxRuns) || maxRuns < 1) throw new Error('--max-runs must be a positive integer.');
+    const result = await runPluginSuite({
+      cwd: process.cwd(),
+      pluginPath: options.plugin,
+      suiteDir: options.suite,
+      versions: options.versions,
+      from: options.from,
+      to: options.to,
+      last,
+      platform: options.platform,
+      maxRuns,
+      onStatus: (message) => console.error(message),
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatPluginSuiteMarkdown(result));
+    if (!options.json) {
+      console.log(`JSON artifact: ${result.jsonArtifactPath}`);
+      console.log(`Markdown artifact: ${result.markdownArtifactPath}`);
+    }
+    if (result.incompatibleRuns > 0 && !options.allowIncompatible) process.exitCode = 1;
   });
 
 program.command('plugin-matrix')

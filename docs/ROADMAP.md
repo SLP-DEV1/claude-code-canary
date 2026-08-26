@@ -117,12 +117,16 @@ See [`REPRO_BUNDLES.md`](REPRO_BUNDLES.md) for the export model, exclusions and 
 - [x] default + manifest custom-path discovery
 - [x] inline hook/MCP discovery and frontmatter metadata extraction
 - [x] symlink-safe generator isolation and marker-protected `--force`
-- [ ] multi-plugin compatibility suites
-- [ ] reusable GitHub Action mode for plugin matrices
+- [x] `claude-canary plugin-suite --plugin <path>` full generated-suite runner
+- [x] release × scenario compatibility matrix with JSON + Markdown artifacts
+- [x] per-release and per-scenario aggregate failure summaries
+- [x] bounded suite run budget with explicit override
+- [ ] multi-plugin workspace compatibility suites
+- [ ] reusable GitHub Action mode for plugin suites/matrices
 - [ ] Action performance/caching improvements
 - [ ] richer badge/reporting integrations
 
-See [`PLUGIN_COMPATIBILITY.md`](PLUGIN_COMPATIBILITY.md) for selectors, isolation behavior and compatibility artifacts. See [`PLUGIN_SMOKE_GENERATOR.md`](PLUGIN_SMOKE_GENERATOR.md) for plugin discovery and generated smoke suites.
+See [`PLUGIN_COMPATIBILITY.md`](PLUGIN_COMPATIBILITY.md) for focused single-scenario matrices, [`PLUGIN_SMOKE_GENERATOR.md`](PLUGIN_SMOKE_GENERATOR.md) for plugin discovery and generated smoke suites, and [`PLUGIN_SUITE.md`](PLUGIN_SUITE.md) for full generated-suite compatibility runs.
 
 ## v1.0
 
