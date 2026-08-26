@@ -1,97 +1,96 @@
 #!/usr/bin/env node
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { Command } from 'commander';
-import { bisectCommands } from './bisect.js';
-import { loadScenario } from './config.js';
-import { formatDoctor, runDoctor } from './doctor.js';
-import { formatComparison, formatRun } from './report.js';
+import path from 'node:path';
+import { loadScenario, validateScenario } from './config.js';
 import { runScenario } from './runner.js';
-import { DEFAULT_SCENARIO } from './template.js';
-import { cachedClaudePath, installClaudeVersion, listCachedClaudeVersions, platformId } from './versions.js';
+import { formatComparison, formatRun } from './report.js';
+import { bisectCommands } from './bisect.js';
+import { runDoctor, formatDoctor } from './doctor.js';
+import { createDefaultScenario } from './template.js';
+import {
+  cachedClaudePath,
+  installClaudeVersion,
+  listCachedClaudeVersions,
+  platformId,
+} from './versions.js';
 
 const program = new Command();
+
 program
   .name('cc-canary')
   .description('Regression testing, comparison and bisect tooling for Claude Code')
   .version('0.1.0');
 
 program.command('init')
-  .description('Create a starter Canary scenario')
-  .argument('[path]', 'scenario path', '.canary/basic.canary.yml')
-  .option('-f, --force', 'overwrite an existing scenario', false)
-  .action(async (target: string, options: { force: boolean }) => {
-    const resolved = path.resolve(target);
-    if (!options.force) {
-      try {
-        await access(resolved);
-        throw new Error(`${target} already exists. Use --force to overwrite it.`);
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('already exists')) throw error;
-      }
-    }
-    await mkdir(path.dirname(resolved), { recursive: true });
-    await writeFile(resolved, DEFAULT_SCENARIO, 'utf8');
-    if (path.basename(path.dirname(resolved)) === '.canary') {
-      const ignorePath = path.join(path.dirname(resolved), '.gitignore');
-      try { await access(ignorePath); } catch { await writeFile(ignorePath, 'results/\n', 'utf8'); }
-    }
-    console.log(`Created ${target}`);
+  .description('Create .canary/basic.canary.yml in the current repository')
+  .action(async () => {
+    const target = path.join(process.cwd(), '.canary', 'basic.canary.yml');
+    await createDefaultScenario(target);
+    console.log(`Created ${path.relative(process.cwd(), target)}`);
   });
 
 program.command('validate')
-  .description('Validate a Canary scenario without running Claude')
+  .description('Validate a Canary scenario without invoking Claude Code')
   .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
   .action(async (scenarioPath: string) => {
     const scenario = await loadScenario(scenarioPath);
-    console.log(`✓ ${scenarioPath} is valid (${scenario.name})`);
+    validateScenario(scenario);
+    console.log(`Valid: ${scenario.name}`);
   });
 
 program.command('run')
   .description('Run a scenario once in an isolated Git worktree')
   .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
-  .option('-e, --executable <path>', 'override Claude executable')
-  .option('--json', 'print JSON instead of the human report', false)
-  .action(async (scenarioPath: string, options: { executable?: string; json: boolean }) => {
+  .option('-e, --executable <path>', 'Claude executable override')
+  .option('--json', 'print JSON result')
+  .action(async (scenarioPath: string, options: { executable?: string; json?: boolean }) => {
     const scenario = await loadScenario(scenarioPath);
-    const result = await runScenario(scenario, { executableOverride: options.executable });
+    const result = await runScenario(scenario, {
+      repositoryRoot: process.cwd(),
+      executable: options.executable,
+    });
     console.log(options.json ? JSON.stringify(result, null, 2) : formatRun(result));
     if (!result.passed) process.exitCode = 1;
   });
 
 program.command('compare')
-  .description('Compare the same scenario across two Claude executables or releases')
+  .description('Run the same scenario against two executables or cached Claude Code releases')
   .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
-  .option('--baseline <path>', 'known baseline Claude executable')
+  .option('--baseline <path>', 'baseline Claude executable')
   .option('--candidate <path>', 'candidate Claude executable')
-  .option('--from <version>', 'baseline Claude Code release (x.y.z, stable, latest)')
-  .option('--to <version>', 'candidate Claude Code release (x.y.z, stable, latest)')
-  .option('--json', 'print JSON instead of the human report', false)
-  .action(async (scenarioPath: string, options: { baseline?: string; candidate?: string; from?: string; to?: string; json: boolean }) => {
-    const scenario = await loadScenario(scenarioPath);
-    let baselineExecutable = options.baseline;
-    let candidateExecutable = options.candidate;
-    let baselineLabel = 'baseline';
-    let candidateLabel = 'candidate';
+  .option('--from <version>', 'baseline cached/downloaded release: x.y.z, stable, or latest')
+  .option('--to <version>', 'candidate cached/downloaded release: x.y.z, stable, or latest')
+  .option('--platform <id>', 'override release platform id for --from/--to')
+  .option('--json', 'print JSON result')
+  .action(async (scenarioPath: string, options: {
+    baseline?: string;
+    candidate?: string;
+    from?: string;
+    to?: string;
+    platform?: string;
+    json?: boolean;
+  }) => {
+    const usingPaths = Boolean(options.baseline || options.candidate);
+    const usingVersions = Boolean(options.from || options.to);
+    if (usingPaths && usingVersions) throw new Error('Use either --baseline/--candidate or --from/--to, not both.');
 
-    if (options.from !== undefined || options.to !== undefined) {
-      if (!options.from || !options.to) throw new Error('Use --from and --to together.');
-      if (options.baseline || options.candidate) throw new Error('Use either --baseline/--candidate executables or --from/--to releases, not both.');
-      const onStatus = (message: string) => console.error(message);
-      const baselineInstall = await installClaudeVersion(options.from, { onStatus });
-      const candidateInstall = await installClaudeVersion(options.to, { onStatus });
+    let baselineExecutable: string;
+    let candidateExecutable: string;
+    if (usingVersions) {
+      if (!options.from || !options.to) throw new Error('--from and --to must be provided together.');
+      const baselineInstall = await installClaudeVersion(options.from, { platform: options.platform, onStatus: (message) => console.error(message) });
+      const candidateInstall = await installClaudeVersion(options.to, { platform: options.platform, onStatus: (message) => console.error(message) });
       baselineExecutable = baselineInstall.executablePath;
       candidateExecutable = candidateInstall.executablePath;
-      baselineLabel = baselineInstall.version;
-      candidateLabel = candidateInstall.version;
+    } else {
+      if (!options.baseline || !options.candidate) throw new Error('--baseline and --candidate must be provided together.');
+      baselineExecutable = options.baseline;
+      candidateExecutable = options.candidate;
     }
 
-    if (!baselineExecutable || !candidateExecutable) {
-      throw new Error('Compare requires --baseline <path> and --candidate <path>, or --from <version> and --to <version>.');
-    }
-
-    const baseline = await runScenario(scenario, { executableOverride: baselineExecutable, artifactLabel: baselineLabel });
-    const candidate = await runScenario(scenario, { executableOverride: candidateExecutable, artifactLabel: candidateLabel });
+    const scenario = await loadScenario(scenarioPath);
+    const baseline = await runScenario(scenario, { repositoryRoot: process.cwd(), executable: baselineExecutable });
+    const candidate = await runScenario(scenario, { repositoryRoot: process.cwd(), executable: candidateExecutable });
     console.log(options.json ? JSON.stringify({ baseline, candidate }, null, 2) : formatComparison(baseline, candidate));
     if (!candidate.passed) process.exitCode = 1;
   });
@@ -113,12 +112,15 @@ program.command('bisect')
 const versions = program.command('versions').description('Manage isolated cached Claude Code releases');
 
 versions.command('install')
-  .description('Download and checksum-verify a Claude Code release into Canary cache')
+  .description('Download and authenticate a Claude Code release into Canary cache')
   .argument('<version>', 'x.y.z, stable, or latest')
   .option('--platform <id>', 'override release platform id')
   .action(async (version: string, options: { platform?: string }) => {
     const installed = await installClaudeVersion(version, { platform: options.platform, onStatus: (message) => console.error(message) });
-    console.log(`${installed.cached ? 'Cached' : 'Installed'} ${installed.version} (${installed.platform})\n${installed.executablePath}\nsha256 ${installed.checksum}`);
+    const trust = installed.manifestVerification === 'signed'
+      ? `manifest signed ${installed.signingFingerprint}`
+      : 'manifest checksum-only (release predates 2.1.89 signatures)';
+    console.log(`${installed.cached ? 'Cached' : 'Installed'} ${installed.version} (${installed.platform})\n${installed.executablePath}\nsha256 ${installed.checksum}\n${trust}`);
   });
 
 versions.command('list')
