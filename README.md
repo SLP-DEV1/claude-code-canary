@@ -31,6 +31,7 @@ Canary turns those questions into repeatable tests.
 - `claude-canary run` — run one scenario in a disposable Git worktree
 - `claude-canary compare` — compare two executables **or two release versions**
 - `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
+- `claude-canary plugin-matrix` — test one plugin across recent or explicitly selected Claude Code releases and emit JSON + Markdown compatibility tables
 - `claude-canary bisect --good <version> --bad <version>` — automatically find the first bad published Claude Code release
 - `claude-canary bisect --commands ...` — binary-search custom Claude executables/wrappers
 - `claude-canary versions install|list|path` — isolated historical Claude Code cache
@@ -127,6 +128,47 @@ The generated `issue-report.md` summarizes deterministic failures, versions, cha
 **Always inspect the complete generated bundle before publishing it.** Generic redaction cannot know which project-specific source code, customer names or business logic are confidential.
 
 See [`docs/REPRO_BUNDLES.md`](docs/REPRO_BUNDLES.md) for the fixture-selection rules, exclusions, threat model and publishing checklist.
+
+## Test a plugin across Claude Code releases
+
+Plugin authors can turn compatibility into a repeatable matrix instead of waiting for users to report that an update broke commands, hooks or MCP-backed behavior.
+
+```bash
+claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
+  --plugin ./my-plugin \
+  --last 10
+```
+
+Canary resolves the selected published releases, authenticates/reuses each native Claude Code binary through its version cache, starts every run from the same Git commit, copies the plugin into a fresh temporary runtime directory, and injects that copy with `--plugin-dir`.
+
+Example Markdown output:
+
+```text
+| Claude Code | Result | Tool calls | Tokens | Failure |
+| --- | --- | ---: | ---: | --- |
+| 2.1.231 | ✅ Compatible | 8 | 12430 | |
+| 2.1.232 | ✅ Compatible | 9 | 13102 | |
+| 2.1.233 | ❌ Incompatible | 3 | 4190 | Plugin command was not available |
+```
+
+The matrix writes both JSON and README-friendly Markdown under `.canary/results/` and identifies the earliest incompatible release in the selected set.
+
+You can also select explicit versions or an inclusive published range:
+
+```bash
+claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
+  --plugin ./my-plugin \
+  --versions 2.1.231 2.1.232 2.1.233
+
+claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
+  --plugin ./my-plugin \
+  --from 2.1.220 \
+  --to 2.1.237
+```
+
+By default any incompatible release makes the command exit non-zero, which turns it into a CI compatibility gate. Use `--allow-incompatible` for documentation-only historical matrices. A copy-ready smoke scenario lives at [`examples/plugin-smoke.canary.yml`](examples/plugin-smoke.canary.yml).
+
+See [`docs/PLUGIN_COMPATIBILITY.md`](docs/PLUGIN_COMPATIBILITY.md) for isolation details, selectors, artifacts and guidance for writing a smoke scenario that actually proves the plugin participated.
 
 ## GitHub Action
 
@@ -344,6 +386,8 @@ The version cache authenticates signed manifests for Claude Code 2.1.89+ with An
 
 Reproduction bundles add a second publishing-safety boundary: minimal deterministic fixture selection, hard exclusions, bounded text-only copying, redaction and a final high-risk path audit. This reduces accidental leakage, but manual review is still required before sharing a bundle.
 
+Plugin matrices copy the source plugin into a fresh temporary runtime directory for each version before passing it to Claude. This protects the original plugin path from run-time mutation, but plugin code still executes with the same OS-account privileges as the Claude Code process.
+
 ## Result artifacts
 
 Each run writes a JSON result under:
@@ -354,7 +398,7 @@ Each run writes a JSON result under:
 
 The artifact contains pass/fail, assertion failures, Claude exit status, changed files, verification command summaries, duration, tool-call count, token usage, cost and captured hook-event names when available. Raw model text is not copied into the summary artifact by default.
 
-Configuration experiments additionally write an aggregate `*-experiment.json` artifact with per-variant pass-rate and efficiency metrics.
+Configuration experiments additionally write an aggregate `*-experiment.json` artifact with per-variant pass-rate and efficiency metrics. Plugin matrices write a `*-plugin-compat.json` artifact plus a matching `*-plugin-compat.md` table for README/release-note reuse.
 
 ## Roadmap
 
@@ -363,7 +407,7 @@ Configuration experiments additionally write an aggregate `*-experiment.json` ar
 3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
 4. **v0.4 — record/replay**: core recording + exact-commit replay shipped; one-command capture and smarter assertion suggestions next
 5. **v0.5 — repro bundles**: privacy-first minimal fixture export, launchers and issue report shipped
-6. **v0.6 — ecosystem**: plugin compatibility matrix, Action refinements and badge/reporting integrations
+6. **v0.6 — ecosystem**: plugin compatibility matrix core shipped; plugin smoke generators, Action mode and badge/reporting integrations next
 7. **v1.0 — stable scenario schema and reporter API**
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for details.
