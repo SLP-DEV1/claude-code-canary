@@ -51,6 +51,7 @@ export interface RunPluginMatrixOptions {
   to?: string;
   last?: number;
   platform?: string;
+  writeArtifacts?: boolean;
   onStatus?: (message: string) => void;
 }
 
@@ -240,8 +241,10 @@ export async function runPluginMatrix(scenario: Scenario, options: RunPluginMatr
     createdAt: new Date().toISOString(),
   };
 
-  const artifacts = await writeMatrixArtifacts(cwd, result);
-  result.jsonArtifactPath = artifacts.json;
-  result.markdownArtifactPath = artifacts.markdown;
+  if (options.writeArtifacts !== false) {
+    const artifacts = await writeMatrixArtifacts(cwd, result);
+    result.jsonArtifactPath = artifacts.json;
+    result.markdownArtifactPath = artifacts.markdown;
+  }
   return result;
 }
