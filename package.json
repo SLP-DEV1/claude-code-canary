@@ -1,0 +1,46 @@
+{
+  "name": "claude-code-canary",
+  "version": "0.1.0",
+  "description": "Regression testing, comparison and bisect tooling for Claude Code",
+  "type": "module",
+  "bin": {
+    "cc-canary": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "claude-code",
+    "anthropic",
+    "regression-testing",
+    "agent-evals",
+    "cli",
+    "ai-coding"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "minimatch": "^10.0.3",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

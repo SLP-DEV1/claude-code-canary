@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/raw/main/schemas/canary.schema.json",
+  "title": "Claude Code Canary Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "prompt"],
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "prompt": { "type": "string", "minLength": 1 },
+    "setup": { "$ref": "#/$defs/commands" },
+    "verify": { "$ref": "#/$defs/commands" },
+    "claude": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "executable": { "type": "string", "minLength": 1, "default": "claude" },
+        "args": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "model": { "type": "string", "minLength": 1 },
+        "permission_mode": { "enum": ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"] },
+        "include_hook_events": { "type": "boolean", "default": false },
+        "max_turns": { "type": "integer", "minimum": 1 },
+        "max_budget_usd": { "type": "number", "exclusiveMinimum": 0 },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "default": 900 },
+        "env": { "type": "object", "additionalProperties": { "type": "string" }, "default": {} }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "changed_files": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allow": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "deny": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "files_exist": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "files_absent": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "file_contains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "text"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_tool_calls": { "type": "integer", "minimum": 0 },
+        "max_total_tokens": { "type": "integer", "minimum": 0 },
+        "max_cost_usd": { "type": "number", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commands": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

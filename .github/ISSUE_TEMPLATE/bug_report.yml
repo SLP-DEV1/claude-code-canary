@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible Claude Code Canary bug
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping make regressions reproducible. Remove secrets before attaching result artifacts.
+  - type: input
+    id: version
+    attributes:
+      label: Canary version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Windows 11, Node 24, Claude Code x.y.z
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Minimal scenario / reproduction
+      description: Paste the smallest scenario and commands needed to reproduce the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
