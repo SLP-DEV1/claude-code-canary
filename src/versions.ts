@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { verifyReleaseManifest, type ManifestVerification } from './release-signature.js';
 
 const RELEASE_BASE = 'https://downloads.claude.ai/claude-code-releases';
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
@@ -32,9 +33,22 @@ export interface InstalledClaudeVersion {
   platform: string;
   executablePath: string;
   manifestPath: string;
+  metadataPath: string;
   checksum: string;
   bytes: number;
   cached: boolean;
+  manifestVerification: ManifestVerification['mode'];
+  signingFingerprint: string | null;
+}
+
+interface CachedInstallMetadata {
+  version: string;
+  platform: string;
+  checksum: string;
+  bytes: number;
+  manifestVerification: ManifestVerification['mode'];
+  signingFingerprint: string | null;
+  verifiedAt: string;
 }
 
 function status(options: InstallVersionOptions, message: string): void {
@@ -88,10 +102,14 @@ function validateResolvedVersion(value: string, source: string): string {
   return version;
 }
 
-async function fetchText(url: string): Promise<string> {
+async function fetchBytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok) throw new Error(`HTTP ${response.status} while fetching ${url}`);
-  return response.text();
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function fetchText(url: string): Promise<string> {
+  return new TextDecoder().decode(await fetchBytes(url));
 }
 
 export async function resolveClaudeVersion(spec: string): Promise<string> {
@@ -169,6 +187,26 @@ async function downloadBinary(url: string, destination: string): Promise<{ check
   return { checksum: hash.digest('hex'), bytes };
 }
 
+async function writeInstallMetadata(
+  metadataPath: string,
+  version: string,
+  platform: string,
+  checksum: string,
+  bytes: number,
+  verification: ManifestVerification,
+): Promise<void> {
+  const metadata: CachedInstallMetadata = {
+    version,
+    platform,
+    checksum,
+    bytes,
+    manifestVerification: verification.mode,
+    signingFingerprint: verification.fingerprint,
+    verifiedAt: new Date().toISOString(),
+  };
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
+}
+
 export async function installClaudeVersion(
   spec: string,
   options: InstallVersionOptions = {},
@@ -179,9 +217,12 @@ export async function installClaudeVersion(
   const versionDir = path.join(cacheRoot, 'versions', version, platform);
   const executablePath = path.join(versionDir, executableName(platform));
   const manifestPath = path.join(versionDir, 'manifest.json');
+  const metadataPath = path.join(versionDir, 'install.json');
 
   status(options, `Resolving Claude Code ${version} (${platform})...`);
-  const manifestRaw = await fetchText(`${RELEASE_BASE}/${version}/manifest.json`);
+  const manifestBytes = await fetchBytes(`${RELEASE_BASE}/${version}/manifest.json`);
+  const verification = await verifyReleaseManifest(version, manifestBytes, cacheRoot);
+  const manifestRaw = new TextDecoder().decode(manifestBytes);
   const manifest = parseManifest(manifestRaw, version);
   const expected = manifest.platforms[platform];
   if (!expected) {
@@ -189,13 +230,21 @@ export async function installClaudeVersion(
     throw new Error(`Claude Code ${version} has no ${platform} binary. Available platforms: ${available}`);
   }
 
+  status(
+    options,
+    verification.mode === 'signed'
+      ? `Verified signed release manifest (${verification.fingerprint}).`
+      : `Release predates signed manifests; using checksum-only verification.`,
+  );
+
   await mkdir(versionDir, { recursive: true });
-  await writeFile(manifestPath, `${manifestRaw.trim()}\n`, 'utf8');
+  await writeFile(manifestPath, manifestBytes);
 
   if (await fileExists(executablePath)) {
     const current = await hashFile(executablePath);
     const sizeMatches = expected.size === undefined || expected.size === current.bytes;
     if (current.checksum === expected.checksum && sizeMatches) {
+      await writeInstallMetadata(metadataPath, version, platform, current.checksum, current.bytes, verification);
       status(options, `Using cached Claude Code ${version} (${platform}).`);
       return {
         requested: spec,
@@ -203,9 +252,12 @@ export async function installClaudeVersion(
         platform,
         executablePath,
         manifestPath,
+        metadataPath,
         checksum: current.checksum,
         bytes: current.bytes,
         cached: true,
+        manifestVerification: verification.mode,
+        signingFingerprint: verification.fingerprint,
       };
     }
     status(options, `Cached Claude Code ${version} failed integrity check; replacing it.`);
@@ -227,6 +279,7 @@ export async function installClaudeVersion(
     }
     if (process.platform !== 'win32') await chmod(temporary, 0o755);
     await rename(temporary, executablePath);
+    await writeInstallMetadata(metadataPath, version, platform, downloaded.checksum, downloaded.bytes, verification);
     status(options, `Cached Claude Code ${version} at ${executablePath}`);
     return {
       requested: spec,
@@ -234,9 +287,12 @@ export async function installClaudeVersion(
       platform,
       executablePath,
       manifestPath,
+      metadataPath,
       checksum: downloaded.checksum,
       bytes: downloaded.bytes,
       cached: false,
+      manifestVerification: verification.mode,
+      signingFingerprint: verification.fingerprint,
     };
   } catch (error) {
     await rm(temporary, { force: true });
