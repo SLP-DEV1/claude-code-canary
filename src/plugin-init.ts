@@ -209,7 +209,14 @@ async function parseJsonFile(file: string, root: string): Promise<Record<string,
 }
 
 function hookComponents(config: Record<string, unknown>, sourcePath: string, source: 'default' | 'manifest'): PluginComponent[] {
-  return Object.keys(config).sort().map((event) => ({ kind: 'hook', name: event, path: sourcePath, source }));
+  const wrapped = config.hooks;
+  const eventMap = typeof wrapped === 'object' && wrapped !== null && !Array.isArray(wrapped)
+    ? wrapped as Record<string, unknown>
+    : config;
+  return Object.entries(eventMap)
+    .filter(([, handlers]) => Array.isArray(handlers))
+    .map(([event]) => ({ kind: 'hook' as const, name: event, path: sourcePath, source }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function collectHooks(root: string, manifest: PluginManifest): Promise<PluginComponent[]> {
