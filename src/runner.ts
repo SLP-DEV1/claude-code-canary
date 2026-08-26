@@ -143,7 +143,8 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
 
     const rawChangedFiles = await getChangedFiles(worktree.path);
     const changedFiles = await filterFixtureChanges(worktree.path, rawChangedFiles, prepared?.fixtureState);
-    failures.push(...await evaluateExpectations(scenario, worktree.path, changedFiles, metrics));
+    const claudeOutput = `${claudeResult.stdout}\n${claudeResult.stderr}`;
+    failures.push(...await evaluateExpectations(scenario, worktree.path, changedFiles, metrics, claudeOutput));
 
     const result: RunResult = {
       schemaVersion: 1,
