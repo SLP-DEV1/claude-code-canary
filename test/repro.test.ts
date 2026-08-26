@@ -164,7 +164,7 @@ describe('reproduction bundle safety', () => {
 
     const exportedSource = await readFile(path.join(output, 'fixture', 'src', 'auth', 'base.ts'), 'utf8');
     expect(exportedSource).not.toContain('sk-abcdefghijklmnopqrstuvwxyz123456');
-    expect(exportedSource).toContain('[REDACTED_SECRET]');
+    expect(exportedSource).toContain('[REDACTED]');
     expect(bundle.redactedFiles).toContain('src/auth/base.ts');
 
     expect(await fileExists(path.join(output, 'fixture', 'src', 'other.ts'))).toBe(false);
