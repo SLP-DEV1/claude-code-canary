@@ -35,7 +35,10 @@ async function writePlugin(root: string): Promise<string> {
   await writeFile(path.join(plugin, 'commands', 'hello.md'), '---\nname: ignored-frontmatter-name\ndescription: Say hello\n---\nHello.\n', 'utf8');
   await writeFile(path.join(plugin, 'custom-agents', 'reader.md'), '---\nname: reader\ndescription: Read-only repository helper\n---\nInspect only.\n', 'utf8');
   await writeFile(path.join(plugin, 'skills', 'repo-guide', 'SKILL.md'), '---\nname: Repo Guide\ndescription: Use for repository orientation\n---\nGuide the user.\n', 'utf8');
-  await writeFile(path.join(plugin, 'hooks', 'hooks.json'), JSON.stringify({ Stop: [{ hooks: [] }] }), 'utf8');
+  await writeFile(path.join(plugin, 'hooks', 'hooks.json'), JSON.stringify({
+    description: 'Wrapped plugin hook config',
+    hooks: { Stop: [{ hooks: [] }] },
+  }), 'utf8');
   await writeFile(path.join(plugin, '.mcp.json'), JSON.stringify({ mcpServers: { local: { command: 'node', args: ['local.js'] } } }), 'utf8');
   return plugin;
 }
@@ -52,6 +55,7 @@ describe('plugin smoke generator', () => {
     expect(discovery.agents.map((entry) => entry.name)).toEqual(['reader']);
     expect(discovery.skills.map((entry) => entry.name)).toEqual(['Repo Guide']);
     expect(discovery.hooks.map((entry) => entry.name)).toEqual(['SessionStart', 'Stop']);
+    expect(discovery.hooks.some((entry) => entry.name === 'description')).toBe(false);
     expect(discovery.mcpServers.map((entry) => entry.name)).toEqual(['demo', 'local']);
   });
 
