@@ -20,24 +20,27 @@ Claude Code Canary aims to become the compatibility and regression layer for ser
 - [ ] Windows integration fixture
 - [ ] macOS integration fixture
 
-## v0.2 — Claude Code version manager
+## v0.2 — Claude Code version intelligence
 
-Goal: make comparisons work without users manually maintaining old binaries or replacing their system Claude installation.
+Goal: make comparisons and regression bisection work without users manually maintaining old binaries or replacing their system Claude installation.
 
 - [x] resolve exact, `stable` and `latest` releases from official distribution endpoints
 - [x] isolated per-version/per-platform binary cache
 - [x] verify SHA256 checksum and published file size before accepting a binary
+- [x] verify detached manifests for 2.1.89+ with pinned Anthropic release-signing fingerprint
+- [x] explicitly mark pre-2.1.89 installs as checksum-only
 - [x] re-verify cached binary before reuse
 - [x] Windows, macOS, Linux and musl platform mapping
 - [x] `cc-canary versions list`
 - [x] `cc-canary versions install <version>`
 - [x] `cc-canary versions path <version>`
 - [x] `cc-canary compare --from <version> --to <version>`
-- [ ] verify detached manifest GPG signatures with pinned Anthropic fingerprint
-- [ ] release-range discovery for `cc-canary bisect --good <version> --bad <version>`
+- [x] discover actual published release ranges for `cc-canary bisect --good <version> --bad <version>`
+- [x] lazily download only the releases probed by binary search
 - [ ] resumable downloads and cache pruning
+- [ ] offline catalog snapshot / explicitly cached-only bisect mode
 
-The manager intentionally avoids the deprecated global npm installation path and never rewrites the user's normal Claude binary/symlink.
+The manager never rewrites the user's normal Claude binary/symlink. Published release bisection uses the package release catalog as an index, while every native binary is still obtained and authenticated through Canary's release cache.
 
 ## v0.3 — Configuration experiments
 
