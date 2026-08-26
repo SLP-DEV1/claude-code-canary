@@ -7,6 +7,7 @@ import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
+import { finishRecording, startRecording } from './record.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
@@ -17,6 +18,15 @@ program
   .name('claude-canary')
   .description('Regression testing, comparison and bisect tooling for Claude Code')
   .version('0.1.0');
+
+function resolveRecordingName(positional?: string, optionName?: string): string {
+  if (positional && optionName && positional !== optionName) {
+    throw new Error(`Recording name was provided twice with different values: ${positional} and ${optionName}.`);
+  }
+  const name = positional ?? optionName;
+  if (!name) throw new Error('Provide a recording name as an argument or with --name <name>.');
+  return name;
+}
 
 program.command('init')
   .description('Create a starter Canary scenario')
@@ -47,6 +57,91 @@ program.command('validate')
   .action(async (scenarioPath: string) => {
     const scenario = await loadScenario(scenarioPath);
     console.log(`✓ ${scenarioPath} is valid (${scenario.name})`);
+  });
+
+program.command('record')
+  .description('Snapshot a clean repository before a real Claude Code task')
+  .argument('[name]', 'recording name')
+  .option('--name <name>', 'recording name (alternative to positional argument)')
+  .requiredOption('--prompt <text>', 'task prompt to save for replay')
+  .option('--setup <commands...>', 'portable setup commands to include in generated scenario')
+  .option('--verify <commands...>', 'portable verification commands to include in generated scenario')
+  .option('-e, --executable <path>', 'Claude executable used for version metadata', 'claude')
+  .option('--model <model>', 'model metadata to preserve in the generated scenario')
+  .option('-f, --force', 'replace an existing pending recording with the same name', false)
+  .action(async (nameArg: string | undefined, options: {
+    name?: string;
+    prompt: string;
+    setup?: string[];
+    verify?: string[];
+    executable: string;
+    model?: string;
+    force: boolean;
+  }) => {
+    const name = resolveRecordingName(nameArg, options.name);
+    const state = await startRecording(name, {
+      cwd: process.cwd(),
+      prompt: options.prompt,
+      setupCommands: options.setup,
+      verifyCommands: options.verify,
+      executable: options.executable,
+      model: options.model,
+      force: options.force,
+    });
+    console.log(`Claude Code Canary — recording started\n\nName: ${state.name}\nStart commit: ${state.startCommit}`);
+    if (state.claude.version) console.log(`Claude: ${state.claude.version}`);
+    if (state.promptRedacted) console.log('Prompt: sensitive token/path patterns were redacted before persistence.');
+    console.log(`\nRun the real Claude Code task now, then save it with:\n  claude-canary save ${name}`);
+  });
+
+program.command('save')
+  .description('Turn a pending recording and the current Git diff into a Canary scenario')
+  .argument('[name]', 'recording name')
+  .option('--name <name>', 'recording name (alternative to positional argument)')
+  .option('--setup <commands...>', 'additional portable setup commands')
+  .option('--verify <commands...>', 'additional portable verification commands')
+  .option('-o, --output <path>', 'generated scenario path')
+  .action(async (nameArg: string | undefined, options: {
+    name?: string;
+    setup?: string[];
+    verify?: string[];
+    output?: string;
+  }) => {
+    const name = resolveRecordingName(nameArg, options.name);
+    const result = await finishRecording(name, {
+      cwd: process.cwd(),
+      output: options.output,
+      setupCommands: options.setup,
+      verifyCommands: options.verify,
+    });
+    console.log(`Claude Code Canary — recording saved\n\nScenario: ${result.scenarioPath}\nRecorded commit: ${result.scenario.recording?.git_commit}`);
+    console.log(`Required changed files (${result.changedFiles.length}):`);
+    for (const file of result.changedFiles) console.log(`  ${file}`);
+    console.log(`\nReview/edit the generated assertions, then replay with:\n  claude-canary replay ${result.scenarioPath}`);
+  });
+
+program.command('replay')
+  .description('Replay a recorded scenario from its original Git commit')
+  .argument('[scenario]', 'recorded scenario YAML', '.canary/basic.canary.yml')
+  .option('-e, --executable <path>', 'override Claude executable')
+  .option('--json', 'print JSON instead of the human report', false)
+  .action(async (scenarioPath: string, options: { executable?: string; json: boolean }) => {
+    const scenario = await loadScenario(scenarioPath);
+    if (!scenario.recording?.git_commit) {
+      throw new Error(`${scenarioPath} has no recording.git_commit metadata. Use claude-canary run for ordinary scenarios.`);
+    }
+    if (scenario.recording.prompt_redacted) {
+      console.error('Note: the recorded prompt was redacted for portability/secrets; review the generated prompt before judging replay fidelity.');
+    }
+    const result = await runScenario(scenario, {
+      cwd: process.cwd(),
+      executableOverride: options.executable,
+      gitRefOverride: scenario.recording.git_commit,
+      allowDirtyWorkingTree: true,
+      artifactLabel: `replay-${scenario.recording.git_commit.slice(0, 8)}`,
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatRun(result));
+    if (!result.passed) process.exitCode = 1;
   });
 
 program.command('run')
