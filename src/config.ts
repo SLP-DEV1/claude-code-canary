@@ -56,6 +56,8 @@ export const ScenarioSchema = z.object({
     files_exist: z.array(z.string().min(1)).default([]),
     files_absent: z.array(z.string().min(1)).default([]),
     file_contains: z.array(fileContains).default([]),
+    claude_output_contains: z.array(z.string().min(1)).default([]),
+    claude_output_absent: z.array(z.string().min(1)).default([]),
   }).strict().optional(),
   limits: z.object({
     max_tool_calls: z.number().int().nonnegative().optional(),
