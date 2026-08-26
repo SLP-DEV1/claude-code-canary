@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Scenario } from './config.js';
 import { evaluateExpectations } from './evaluate.js';
-import { createDetachedWorktree, getChangedFiles, getHeadCommit, getRepoRoot, getTrackedChanges } from './git.js';
+import { createDetachedWorktree, getChangedFiles, getRepoRoot, getTrackedChanges, resolveCommit } from './git.js';
 import { parseStreamMetrics } from './metrics.js';
 import { runShellCommand, spawnCapture } from './process.js';
 import type { CommandSummary, ProcessResult, RunResult } from './types.js';
@@ -20,6 +20,8 @@ export interface RunOptions {
   executableOverride?: string;
   artifactLabel?: string;
   prepareWorktree?: (worktreePath: string) => Promise<PreparedRun>;
+  gitRefOverride?: string;
+  allowDirtyWorkingTree?: boolean;
 }
 
 function summarize(command: string, result: ProcessResult): CommandSummary {
@@ -69,13 +71,16 @@ export async function filterFixtureChanges(
 export async function runScenario(scenario: Scenario, options: RunOptions = {}): Promise<RunResult> {
   const invocationDir = options.cwd ?? process.cwd();
   const repoRoot = await getRepoRoot(invocationDir);
-  const trackedChanges = await getTrackedChanges(repoRoot);
-  if (trackedChanges.length > 0) {
-    throw new Error('Canary requires a clean tracked working tree so every run starts from the same commit. Commit or stash tracked changes first.');
+  if (!options.allowDirtyWorkingTree) {
+    const trackedChanges = await getTrackedChanges(repoRoot);
+    if (trackedChanges.length > 0) {
+      throw new Error('Canary requires a clean tracked working tree so every run starts from the same commit. Commit or stash tracked changes first.');
+    }
   }
 
-  const gitCommit = await getHeadCommit(repoRoot);
-  const worktree = await createDetachedWorktree(repoRoot);
+  const requestedRef = options.gitRefOverride ?? 'HEAD';
+  const gitCommit = await resolveCommit(repoRoot, requestedRef);
+  const worktree = await createDetachedWorktree(repoRoot, gitCommit);
   const started = Date.now();
   const setup: CommandSummary[] = [];
   const verification: CommandSummary[] = [];

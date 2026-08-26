@@ -15,8 +15,18 @@ export async function getRepoRoot(cwd: string): Promise<string> {
   return git(['rev-parse', '--show-toplevel'], cwd);
 }
 
+export async function getGitDir(cwd: string): Promise<string> {
+  const repoRoot = await getRepoRoot(cwd);
+  const value = await git(['rev-parse', '--git-dir'], repoRoot);
+  return path.resolve(repoRoot, value);
+}
+
 export async function getHeadCommit(cwd: string): Promise<string> {
   return git(['rev-parse', 'HEAD'], cwd);
+}
+
+export async function resolveCommit(cwd: string, ref: string): Promise<string> {
+  return git(['rev-parse', '--verify', `${ref}^{commit}`], cwd);
 }
 
 export async function getTrackedChanges(cwd: string): Promise<string[]> {
@@ -29,10 +39,10 @@ export interface WorktreeHandle {
   cleanup: () => Promise<void>;
 }
 
-export async function createDetachedWorktree(repoRoot: string): Promise<WorktreeHandle> {
+export async function createDetachedWorktree(repoRoot: string, ref = 'HEAD'): Promise<WorktreeHandle> {
   const parent = await mkdtemp(path.join(tmpdir(), 'cc-canary-'));
   const worktreePath = path.join(parent, 'worktree');
-  await git(['worktree', 'add', '--detach', worktreePath, 'HEAD'], repoRoot);
+  await git(['worktree', 'add', '--detach', worktreePath, ref], repoRoot);
 
   return {
     path: worktreePath,

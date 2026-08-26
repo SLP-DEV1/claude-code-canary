@@ -64,11 +64,23 @@ See [`CONFIG_EXPERIMENTS.md`](CONFIG_EXPERIMENTS.md) for the variant layout and 
 
 ## v0.4 — Record and replay
 
-- record a real headless/interactively-exported task into a scenario candidate
-- capture starting Git commit and deterministic verification signals
-- redact secrets and machine-specific paths
-- convert selected file/tool outcomes into assertions
-- replay from the same repository state
+- [x] snapshot a clean repository before a real interactive/headless Claude task
+- [x] store pending recorder state outside the working-tree diff under `.git/cc-canary/recordings`
+- [x] capture exact starting Git commit and Claude version/model metadata
+- [x] capture project configuration presence without raw config/environment values
+- [x] redact common secrets and machine-specific absolute paths from persisted prompt metadata
+- [x] reject secret-bearing/non-portable setup and verification commands
+- [x] derive allow + required changed-file assertions from the successful task
+- [x] derive files-exist / files-absent assertions
+- [x] generate reviewable editable Canary YAML
+- [x] replay from the exact recorded commit in an isolated detached worktree
+- [x] allow replay while the current source checkout still contains the successful dirty edits
+- [ ] optional one-command headless `record --run` capture
+- [ ] interactive prompt handoff/launcher without transcript persistence
+- [ ] smarter opt-in content assertion suggestions
+- [ ] recording inventory / abort command
+
+See [`RECORD_REPLAY.md`](RECORD_REPLAY.md) for the workflow, privacy model and limitations.
 
 ## v0.5 — Reproduction bundles
 

@@ -8,12 +8,23 @@ const commandGroup = z.object({
 
 const changedFiles = z.object({
   allow: z.array(z.string().min(1)).default([]),
+  require: z.array(z.string().min(1)).default([]),
   deny: z.array(z.string().min(1)).default([]),
 }).strict();
 
 const fileContains = z.object({
   path: z.string().min(1),
   text: z.string(),
+}).strict();
+
+const recordingMetadata = z.object({
+  git_commit: z.string().regex(/^[0-9a-f]{40}$/i),
+  recorded_at: z.string().min(1),
+  claude_version: z.string().min(1).optional(),
+  executable: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  config_files: z.array(z.string().min(1)).default([]),
+  prompt_redacted: z.boolean().default(false),
 }).strict();
 
 export const ScenarioSchema = z.object({
@@ -51,6 +62,7 @@ export const ScenarioSchema = z.object({
     max_total_tokens: z.number().int().nonnegative().optional(),
     max_cost_usd: z.number().nonnegative().optional(),
   }).strict().optional(),
+  recording: recordingMetadata.optional(),
 }).strict();
 
 export type Scenario = z.infer<typeof ScenarioSchema>;
