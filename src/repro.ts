@@ -99,11 +99,11 @@ export function fixtureRootFromPattern(pattern: string): string | null {
   const normalized = posixRelative(pattern);
   const match = normalized.match(GLOB_META);
   if (!match || match.index === undefined) return normalized;
-  const prefix = normalized.slice(0, match.index).replace(/\/+$/, '');
+  const rawPrefix = normalized.slice(0, match.index);
+  const prefix = rawPrefix.replace(/\/+$/, '');
   if (!prefix) return null;
+  if (rawPrefix.endsWith('/')) return prefix;
   const lastSlash = prefix.lastIndexOf('/');
-  if (prefix.endsWith('/')) return prefix.slice(0, -1) || null;
-  if (lastSlash < 0 && !prefix.includes('.')) return prefix;
   return lastSlash >= 0 ? prefix.slice(0, lastSlash) || null : null;
 }
 
