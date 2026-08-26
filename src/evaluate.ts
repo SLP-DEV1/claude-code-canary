@@ -18,6 +18,7 @@ export async function evaluateExpectations(
   worktree: string,
   changedFiles: string[],
   metrics: RunMetrics,
+  claudeOutput = '',
 ): Promise<string[]> {
   const failures: string[] = [];
   const expected = scenario.expect;
@@ -58,6 +59,14 @@ export async function evaluateExpectations(
     } catch {
       failures.push(`Could not read file for content assertion: ${assertion.path}`);
     }
+  }
+
+  for (const text of expected?.claude_output_contains ?? []) {
+    if (!claudeOutput.includes(text)) failures.push(`Claude output does not contain expected text: ${JSON.stringify(text)}`);
+  }
+
+  for (const text of expected?.claude_output_absent ?? []) {
+    if (claudeOutput.includes(text)) failures.push(`Claude output contains forbidden text: ${JSON.stringify(text)}`);
   }
 
   if (scenario.limits?.max_tool_calls !== undefined && metrics.toolCalls > scenario.limits.max_tool_calls) {
