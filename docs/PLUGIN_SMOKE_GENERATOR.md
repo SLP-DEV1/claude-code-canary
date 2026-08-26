@@ -33,9 +33,11 @@ It reads `.claude-plugin/plugin.json`, then discovers:
 - hooks from `hooks/hooks.json` plus manifest `hooks` path or inline configuration
 - MCP servers from `.mcp.json` plus manifest `mcpServers` path or inline configuration
 
-Command, agent and skill frontmatter is used for component names and descriptions where present.
+Command names come from their Markdown filenames, matching Claude Code's slash-command semantics; command frontmatter contributes metadata such as `description`. Agent and skill names/descriptions use frontmatter where supported and fall back to their filenames/directories.
 
 Custom manifest paths must follow Claude Code's portable plugin rules: they must start with `./`, remain inside the plugin root, use forward slashes and must not contain `..` traversal.
+
+If the same MCP server name is defined by two different plugin sources, Canary fails discovery instead of silently choosing one. This mirrors Claude Code's conflict-oriented plugin loading model and keeps generated suites deterministic.
 
 ## Generated scenarios
 
