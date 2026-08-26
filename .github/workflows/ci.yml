@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/repro-bundles]
+    branches: [main]
   pull_request:
 
 permissions:
