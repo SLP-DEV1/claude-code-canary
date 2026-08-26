@@ -4,7 +4,6 @@ import { loadScenario, type Scenario } from './config.js';
 import { getRepoRoot } from './git.js';
 import { discoverPlugin } from './plugin-init.js';
 import {
-  formatPluginMatrixMarkdown,
   resolvePluginMatrixVersions,
   runPluginMatrix,
   type PluginMatrixEntry,
@@ -80,11 +79,12 @@ export interface PluginSuiteResult {
   markdownArtifactPath?: string;
 }
 
-export interface RunPluginSuiteOptions extends Omit<RunPluginMatrixOptions, 'pluginPath' | 'versions' | 'onStatus'> {
+export interface RunPluginSuiteOptions extends Omit<RunPluginMatrixOptions, 'pluginPath' | 'versions' | 'onStatus' | 'writeArtifacts'> {
   pluginPath: string;
   suiteDir?: string;
   versions?: string[];
   maxRuns?: number;
+  writeArtifacts?: boolean;
   onStatus?: (message: string) => void;
   matrixRunner?: typeof runPluginMatrix;
 }
@@ -197,7 +197,9 @@ export function aggregatePluginSuiteMatrices(
   if (gitCommits.size !== 1) throw new Error('Plugin suite matrices did not run from the same Git commit.');
 
   for (const { matrix } of matrices) {
-    if (matrix.versions.length !== versions.length || matrix.versions.some((version, index) => version !== versions[index])) {
+    const versionMismatch = matrix.versions.length !== versions.length || matrix.versions.some((version, index) => version !== versions[index]);
+    const entryMismatch = matrix.entries.length !== versions.length || matrix.entries.some((entry, index) => entry.version !== versions[index]);
+    if (versionMismatch || entryMismatch) {
       throw new Error(`Plugin suite scenario ${matrix.scenario} did not run the exact selected release set.`);
     }
   }
@@ -233,7 +235,7 @@ export function aggregatePluginSuiteMatrices(
       durationMs: entries.reduce((sum, { entry }) => sum + entry.durationMs, 0),
       toolCalls: entries.reduce((sum, { entry }) => sum + entry.toolCalls, 0),
       totalTokens: entries.reduce((sum, { entry }) => sum + entry.totalTokens, 0),
-      costUsd: costs.length ? costs.reduce((sum, value) => sum + value, 0) : undefined,
+      costUsd: costs.length === entries.length ? costs.reduce((sum, value) => sum + value, 0) : undefined,
       failures,
     };
   });
@@ -331,9 +333,14 @@ async function writeSuiteArtifacts(cwd: string, result: PluginSuiteResult): Prom
 
 export async function runPluginSuite(options: RunPluginSuiteOptions): Promise<PluginSuiteResult> {
   const cwd = path.resolve(options.cwd ?? process.cwd());
-  const discovery = await discoverPlugin(options.pluginPath);
+  const pluginPath = path.resolve(cwd, options.pluginPath);
+  const discovery = await discoverPlugin(pluginPath);
   const suiteDir = path.resolve(cwd, options.suiteDir ?? path.join('.canary', 'plugins', discovery.pluginName));
-  const scenarios = await loadGeneratedPluginSuite(suiteDir);
+  const loadedScenarios = await loadGeneratedPluginSuite(suiteDir);
+  const scenarios = loadedScenarios.map((scenario) => ({
+    ...scenario,
+    path: normalizeRelative(path.relative(cwd, scenario.path)),
+  }));
   const versions = await resolvePluginMatrixVersions({
     versions: options.versions,
     from: options.from,
@@ -351,7 +358,7 @@ export async function runPluginSuite(options: RunPluginSuiteOptions): Promise<Pl
     options.onStatus?.(`[${index + 1}/${scenarios.length}] Running ${suiteScenario.id} across ${versions.length} releases...`);
     const matrix = await runner(suiteScenario.scenario, {
       cwd,
-      pluginPath: options.pluginPath,
+      pluginPath,
       versions,
       platform: options.platform,
       writeArtifacts: false,
@@ -366,11 +373,10 @@ export async function runPluginSuite(options: RunPluginSuiteOptions): Promise<Pl
     versions,
     matrices,
   );
-  const artifacts = await writeSuiteArtifacts(cwd, result);
-  result.jsonArtifactPath = artifacts.json;
-  result.markdownArtifactPath = artifacts.markdown;
+  if (options.writeArtifacts !== false) {
+    const artifacts = await writeSuiteArtifacts(cwd, result);
+    result.jsonArtifactPath = artifacts.json;
+    result.markdownArtifactPath = artifacts.markdown;
+  }
   return result;
 }
-
-// Re-exported for users who want to render one underlying scenario matrix next to the suite report.
-export { formatPluginMatrixMarkdown };
