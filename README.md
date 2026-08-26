@@ -27,6 +27,7 @@ Canary turns those questions into repeatable tests.
 - `claude-canary validate` — validate YAML before spending tokens
 - `claude-canary run` — run one scenario in a disposable Git worktree
 - `claude-canary compare` — compare two executables **or two release versions**
+- `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
 - `claude-canary bisect --good <version> --bad <version>` — automatically find the first bad published Claude Code release
 - `claude-canary bisect --commands ...` — binary-search custom Claude executables/wrappers
 - `claude-canary versions install|list|path` — isolated historical Claude Code cache
@@ -116,6 +117,37 @@ claude-canary compare .canary/basic.canary.yml \
 Missing versions are cached automatically. Canary **does not replace or downgrade your normal `claude` installation**.
 
 See [`docs/VERSION_MANAGER.md`](docs/VERSION_MANAGER.md) for the cache layout and trust model.
+
+## A/B test Claude Code configuration
+
+Measure whether a new Claude Code setup actually improves the same deterministic scenario instead of judging it by feel.
+
+Create two variant directories, for example:
+
+```text
+.canary/variants/
+  current/
+    CLAUDE.md
+  candidate/
+    CLAUDE.md
+    .claude/settings.json
+    .mcp.json
+```
+
+Then run repeated, interleaved trials:
+
+```bash
+claude-canary experiment .canary/basic.canary.yml \
+  --baseline-config .canary/variants/current \
+  --candidate-config .canary/variants/candidate \
+  --runs 5
+```
+
+Canary keeps the Git starting state and scenario identical while varying controlled Claude Code configuration. It reports pass rate plus average tool calls, tokens, cost and duration, and writes a machine-readable aggregate artifact without copying variant contents or environment values into it.
+
+Experiment variants can control project `CLAUDE.md` / `CLAUDE.local.md`, project/local settings, rules, hooks, MCP config and local plugins. User configuration and auto memory are excluded from experiment runs where Claude Code provides controls for doing so; managed organization policy remains effective.
+
+Copy-ready example variants live under [`examples/config-experiment/`](examples/config-experiment/). See [`docs/CONFIG_EXPERIMENTS.md`](docs/CONFIG_EXPERIMENTS.md) for the complete variant layout, isolation guarantees and nondeterminism guidance.
 
 ## Find the first bad Claude Code release
 
@@ -251,11 +283,13 @@ Each run writes a JSON result under:
 
 The artifact contains pass/fail, assertion failures, Claude exit status, changed files, verification command summaries, duration, tool-call count, token usage, cost and captured hook-event names when available. Raw model text is not copied into the summary artifact by default.
 
+Configuration experiments additionally write an aggregate `*-experiment.json` artifact with per-variant pass-rate and efficiency metrics.
+
 ## Roadmap
 
 1. **v0.1 — deterministic harness**: run, compare, bisect, metrics, CI, GitHub Action
 2. **v0.2 — version intelligence**: signed isolated historical binaries + automatic published-release bisect
-3. **v0.3 — config experiments**: A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configs
+3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
 4. **v0.4 — record/replay**: turn a real Claude task into a reusable regression scenario
 5. **v0.5 — repro bundles**: export a minimal redacted bug reproduction
 6. **v0.6 — ecosystem**: plugin compatibility matrix, Action refinements and badge/reporting integrations
