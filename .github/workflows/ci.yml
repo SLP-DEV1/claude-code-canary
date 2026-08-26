@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/plugin-compat-matrix]
   pull_request:
 
 permissions:
@@ -28,3 +28,4 @@ jobs:
       - name: Smoke-test CLI name
         run: |
           node dist/index.js --help | grep -q "Usage: claude-canary"
+          node dist/index.js plugin-matrix --help | grep -q "Test one Claude Code plugin"
