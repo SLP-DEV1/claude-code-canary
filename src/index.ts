@@ -113,12 +113,15 @@ program.command('bisect')
 const versions = program.command('versions').description('Manage isolated cached Claude Code releases');
 
 versions.command('install')
-  .description('Download and checksum-verify a Claude Code release into Canary cache')
+  .description('Download and authenticate a Claude Code release into Canary cache')
   .argument('<version>', 'x.y.z, stable, or latest')
   .option('--platform <id>', 'override release platform id')
   .action(async (version: string, options: { platform?: string }) => {
     const installed = await installClaudeVersion(version, { platform: options.platform, onStatus: (message) => console.error(message) });
-    console.log(`${installed.cached ? 'Cached' : 'Installed'} ${installed.version} (${installed.platform})\n${installed.executablePath}\nsha256 ${installed.checksum}`);
+    const trust = installed.manifestVerification === 'signed'
+      ? `manifest signed ${installed.signingFingerprint}`
+      : 'manifest checksum-only (release predates 2.1.89 signatures)';
+    console.log(`${installed.cached ? 'Cached' : 'Installed'} ${installed.version} (${installed.platform})\n${installed.executablePath}\nsha256 ${installed.checksum}\n${trust}`);
   });
 
 versions.command('list')
