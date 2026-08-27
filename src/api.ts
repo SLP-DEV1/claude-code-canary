@@ -4,8 +4,14 @@ export type { Scenario } from './config.js';
 export { runScenario, filterFixtureChanges } from './runner.js';
 export type { PreparedRun, RunOptions } from './runner.js';
 export { formatRun, formatComparison } from './report.js';
+export { formatComparisonMarkdown } from './comparison-markdown.js';
+export type { ComparisonReportSubject, ComparisonMarkdownOptions } from './comparison-markdown.js';
 export { evaluateComparisonRegressions } from './regressions.js';
-export type { ComparisonRegressionResult } from './regressions.js';
+export type { ComparisonRegressionResult, RegressionComparable } from './regressions.js';
+export { runPrCheck } from './pr-check.js';
+export type { PrCheckOptions, PrCheckResult } from './pr-check.js';
+export { updateBaseline, checkBaseline, loadBaseline, defaultBaselinePath } from './baseline.js';
+export type { BaselineSnapshot, BaselineUpdateOptions, BaselineUpdateResult, BaselineCheckOptions, BaselineCheckResult } from './baseline.js';
 export type { RunResult, RunMetrics, PermissionRequestTrace, CommandSummary, ProcessResult } from './types.js';
 
 export { bisectCommands, bisectReleases } from './bisect.js';
