@@ -25,7 +25,7 @@ const fixtureRoot = path.resolve(process.env.CLAUDE_CANARY_E2E_DIR ?? path.join(
 const port = Number(process.env.CLAUDE_CANARY_PROVIDER_PORT ?? '3456');
 const selectedPath = path.join(providerRoot, 'selected.json');
 const pidPath = path.join(providerRoot, 'router.pid');
-const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-2.5-flash-lite';
+const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-2.5-flash';
 const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const openRouterModel = process.env.CLAUDE_CANARY_OPENROUTER_MODEL ?? 'openrouter/free';
 
@@ -173,9 +173,10 @@ function runCaptured(command, args, { cwd, env }) {
   });
 }
 
-function isProviderCapacityLimit(text) {
+function isProviderFallbackEligible(text) {
   return [
     /\b429\b/i,
+    /\b503\b/i,
     /too many requests/i,
     /rate[ _-]?limit/i,
     /rate_limit_exceeded/i,
@@ -184,6 +185,11 @@ function isProviderCapacityLimit(text) {
     /requests per (?:day|minute)/i,
     /tokens per (?:day|minute)/i,
     /\b(?:RPD|RPM|TPD|TPM)\b/i,
+    /service unavailable/i,
+    /temporarily unavailable/i,
+    /overloaded/i,
+    /model(?:s\/|\s+).*no longer available to new users/i,
+    /please update your code to use models\//i,
   ].some((pattern) => pattern.test(text));
 }
 
@@ -209,7 +215,7 @@ async function runSuite(providerName) {
       },
     });
     // Let the router pipe handlers flush a final provider error before deciding
-    // whether a failure is eligible for a capacity-only fallback.
+    // whether a failure is eligible for a provider-capacity/availability fallback.
     await new Promise((resolve) => setTimeout(resolve, 100));
     return {
       ok: result.status === 0,
@@ -228,8 +234,8 @@ async function tryPrimaryWithOpenRouterFallback(primaryName, hasOpenRouter) {
     return { selected: primaryName, fallbackUsed: false };
   }
 
-  if (hasOpenRouter && isProviderCapacityLimit(primary.diagnostic)) {
-    console.warn(`\n${primaryName} hit a rate/quota limit. Retrying the complete live suite through OpenRouter.`);
+  if (hasOpenRouter && isProviderFallbackEligible(primary.diagnostic)) {
+    console.warn(`\n${primaryName} hit a provider capacity/availability limit. Retrying the complete live suite through OpenRouter.`);
     const fallback = await runSuite('openrouter');
     if (!fallback.ok) throw new Error(`OpenRouter fallback failed with exit code ${fallback.status}.`);
     return { selected: 'openrouter', fallbackUsed: true };
@@ -237,7 +243,7 @@ async function tryPrimaryWithOpenRouterFallback(primaryName, hasOpenRouter) {
 
   throw new Error(
     `${primaryName} live suite failed with exit code ${primary.status}; ` +
-    'not falling back because this does not look like a provider rate/quota limit.',
+    'not falling back because this does not look like a provider capacity/availability failure.',
   );
 }
 
