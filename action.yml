@@ -1,5 +1,5 @@
 name: Claude Code Canary
-description: Regression-test Claude Code releases, plugins and configs with deterministic scenarios and compatibility matrices.
+description: Regression-test Claude Code releases, pull requests, committed baselines, plugins and configs with deterministic scenarios.
 author: SLP-DEV1
 
 branding:
@@ -8,7 +8,7 @@ branding:
 
 inputs:
   mode:
-    description: "Canary workflow: compare, run, plugin-matrix, or plugin-suite."
+    description: "Canary workflow: compare, run, pr-check, baseline-check, plugin-matrix, or plugin-suite."
     required: false
     default: compare
   scenario:
@@ -23,6 +23,22 @@ inputs:
     description: Candidate release for compare, or newest exact release for plugin range mode.
     required: false
     default: ""
+  base-ref:
+    description: Git ref used as the base for pr-check. Pull-request base SHA is auto-detected when blank.
+    required: false
+    default: ""
+  head-ref:
+    description: Git ref used as the candidate for pr-check. Pull-request head SHA is auto-detected when blank.
+    required: false
+    default: ""
+  baseline:
+    description: Optional committed baseline JSON path for baseline-check. Defaults to .canary/baselines/<scenario-name>.json.
+    required: false
+    default: ""
+  comment-pr:
+    description: Best-effort update of one stable Canary PR comment for pr-check. Requires pull-requests: write.
+    required: false
+    default: "false"
   plugin:
     description: Plugin directory for plugin-matrix or plugin-suite.
     required: false
@@ -112,6 +128,9 @@ runs:
         CANARY_SCENARIO: ${{ inputs.scenario }}
         CANARY_FROM: ${{ inputs.from }}
         CANARY_TO: ${{ inputs.to }}
+        CANARY_BASE_REF: ${{ inputs.base-ref }}
+        CANARY_HEAD_REF: ${{ inputs.head-ref }}
+        CANARY_BASELINE: ${{ inputs.baseline }}
         CANARY_PLUGIN: ${{ inputs.plugin }}
         CANARY_SUITE: ${{ inputs.suite }}
         CANARY_VERSIONS: ${{ inputs.versions }}
@@ -120,6 +139,15 @@ runs:
         CANARY_MAX_RUNS: ${{ inputs.max-runs }}
         CANARY_FAIL_ON_INCOMPATIBLE: ${{ inputs.fail-on-incompatible }}
       run: node "${GITHUB_ACTION_PATH}/scripts/action-runner.mjs"
+
+    - name: Update Claude Canary pull request comment
+      if: ${{ always() && inputs.comment-pr == 'true' && inputs.mode == 'pr-check' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CANARY_REPORT_PATH: ${{ steps.canary.outputs.report-path }}
+      run: node "${GITHUB_ACTION_PATH}/scripts/pr-comment.mjs"
 
     - name: Upload Claude Canary results
       if: ${{ always() && inputs.upload-results == 'true' }}
