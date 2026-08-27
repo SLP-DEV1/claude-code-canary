@@ -131,6 +131,11 @@ async function fullSuite() {
   // The first executable is known-good; Node itself is intentionally not a Claude executable and is known-bad.
   canary(['bisect', '.canary/live.canary.yml', '--commands', claude, process.execPath]);
 
+  // `init` is deliberately exercised by coreSuite, but `record` intentionally
+  // requires a completely clean tree. Remove only that harness-generated file;
+  // results/plugins remain ignored and all tracked fixture files stay untouched.
+  await rm(path.join(fixture, '.canary', 'generated.canary.yml'), { force: true });
+
   const recordingPrompt = 'Create recorded.txt in the repository root containing exactly the single line RECORDED_OK. Do not modify any other file.';
   canary(['record', 'live-record', '--prompt', recordingPrompt, '--executable', claude]);
   run(claude, [
