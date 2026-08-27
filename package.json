@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "claude-canary": "./dist/index.js"
+    "claude-canary": "dist/index.js"
   },
   "files": [
     "dist",
