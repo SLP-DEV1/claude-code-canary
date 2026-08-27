@@ -1,0 +1,47 @@
+name: One-shot stale branch cleanup
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor == 'SLP-DEV1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Delete known stale branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          stale=(
+            'chore/ci-validation'
+            'feat/config-experiments'
+            'feat/config-experiments-core'
+            'feat/plugin-compat-matrix'
+            'feat/plugin-smoke-generator'
+            'feat/plugin-suite'
+            'feat/record-replay'
+            'feat/release-bisect'
+            'feat/repro-bundles'
+            'feat/version-manager'
+            'fix/claude-stream-json-verbose'
+            'release/v1.0.0'
+            'security/signed-manifests'
+            'test/live-claude-e2e'
+            'test/live-claude-e2e-temp'
+          )
+          for branch in "${stale[@]}"; do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              echo "Deleting $branch"
+              git push origin --delete "$branch"
+            else
+              echo "Already absent: $branch"
+            fi
+          done
