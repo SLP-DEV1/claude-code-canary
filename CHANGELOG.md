@@ -4,6 +4,13 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+### Added
+
+- add relative `compare` regression thresholds for total/input/output tokens, reported cost and tool calls
+- capture `PermissionRequest` / `PermissionDenied` lifecycle semantics and allow scenarios to fail on unexpected permission prompts
+- preserve ordered hook lifecycle traces and support ordered/exact hook assertions plus release-to-release hook-sequence stability checks
+- automatically enable Claude Code hook-event streaming when permission or lifecycle assertions require it
+
 ## [1.0.1] - 2026-08-27
 
 ### Fixed

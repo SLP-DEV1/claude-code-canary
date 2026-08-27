@@ -12,6 +12,7 @@ import { formatPluginSuiteMarkdown, runPluginSuite } from './plugin-suite.js';
 import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
 import { createReproBundle } from './repro.js';
+import { evaluateComparisonRegressions } from './regressions.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
@@ -214,8 +215,12 @@ program.command('compare')
 
     const baseline = await runScenario(scenario, { executableOverride: baselineExecutable, artifactLabel: baselineLabel });
     const candidate = await runScenario(scenario, { executableOverride: candidateExecutable, artifactLabel: candidateLabel });
-    console.log(options.json ? JSON.stringify({ baseline, candidate }, null, 2) : formatComparison(baseline, candidate));
-    if (!candidate.passed) process.exitCode = 1;
+    const regressions = evaluateComparisonRegressions(scenario, baseline, candidate);
+    const passed = candidate.passed && regressions.passed;
+    console.log(options.json
+      ? JSON.stringify({ baseline, candidate, regressions, passed }, null, 2)
+      : formatComparison(baseline, candidate, regressions.failures));
+    if (!passed) process.exitCode = 1;
   });
 
 program.command('experiment')
