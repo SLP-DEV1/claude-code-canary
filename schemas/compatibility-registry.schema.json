@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/compatibility-registry.schema.json",
+  "title": "Claude Code Canary Compatibility Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","name","generatedAt","manifests"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "manifests": { "type": "array", "items": { "$ref": "compatibility-manifest.schema.json" } }
+  }
+}
