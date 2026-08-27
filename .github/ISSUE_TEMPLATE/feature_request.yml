@@ -3,21 +3,53 @@ description: Suggest a Canary assertion, reporter or workflow
 title: "[feature] "
 labels: [enhancement]
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Scenario assertions / limits
+        - Release compare / bisect
+        - Pull request / baseline CI
+        - Plugin compatibility
+        - MCP contracts
+        - Agent teams
+        - Doctor / environment checks
+        - Reporters / artifacts / API
+        - GitHub Action
+        - Other
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What regression-testing problem should Canary solve?
+      description: What regression-testing problem should Canary solve? Describe the user impact rather than only the implementation.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed behavior
-      description: Show the CLI or scenario syntax you would like to use if possible.
+      description: Show the CLI, Action input, API or scenario syntax you would like to use if possible.
     validations:
       required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example workflow
+      description: A concrete before/after example helps define acceptance criteria.
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
+      description: What workaround are you using today, if any?
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the roadmap for a similar request.
+          required: true
+        - label: This request is about regression testing or compatibility intelligence rather than a generic Claude Code feature.
+          required: true
