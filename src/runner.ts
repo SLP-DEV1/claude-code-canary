@@ -6,6 +6,7 @@ import { evaluateExpectations } from './evaluate.js';
 import { createDetachedWorktree, getChangedFiles, getRepoRoot, getTrackedChanges, resolveCommit } from './git.js';
 import { parseStreamMetrics } from './metrics.js';
 import { mergePermissionProbeMetrics, preparePermissionProbe, type PreparedPermissionProbe } from './permission-probe.js';
+import { evaluatePermissionPolicy } from './policy.js';
 import { runShellCommand, spawnCapture } from './process.js';
 import type { CommandSummary, ProcessResult, RunResult } from './types.js';
 
@@ -169,6 +170,12 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       } catch (error) {
         failures.push(`Permission instrumentation failed: ${error instanceof Error ? error.message : String(error)}`);
       }
+    }
+
+    if (scenario.policy && setupOk) {
+      const evaluation = evaluatePermissionPolicy(claudeResult.stdout, metrics, scenario.policy);
+      metrics.policyCoverage = evaluation.coverage;
+      failures.push(...evaluation.failures);
     }
 
     if (setupOk) {
