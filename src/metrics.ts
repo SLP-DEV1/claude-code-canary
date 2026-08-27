@@ -1,4 +1,4 @@
-import type { PermissionRequestTrace, RunMetrics } from './types.js';
+import type { RunMetrics } from './types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -16,8 +16,6 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
   const toolIds = new Set<string>();
   const hookEvents = new Set<string>();
   const hookEventSequence: string[] = [];
-  const permissionRequests: PermissionRequestTrace[] = [];
-  let permissionDenied = 0;
   let parseErrors = 0;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -26,43 +24,14 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
   let costUsd: number | undefined;
   let turns: number | undefined;
 
-  const inspect = (value: unknown): void => {
+  const inspectToolUses = (value: unknown): void => {
     if (Array.isArray(value)) {
-      for (const item of value) inspect(item);
+      for (const item of value) inspectToolUses(item);
       return;
     }
     if (!isRecord(value)) return;
-
     if (value.type === 'tool_use' && typeof value.id === 'string') toolIds.add(value.id);
-
-    // Claude Code documents hook_event_name as the lifecycle event identifier in
-    // --include-hook-events stream-json output. Preserve that field in encounter
-    // order instead of deriving order from the aggregate Set below.
-    const lifecycleEvent = stringValue(value.hook_event_name);
-    if (lifecycleEvent) {
-      hookEvents.add(lifecycleEvent);
-      hookEventSequence.push(lifecycleEvent);
-
-      if (lifecycleEvent === 'PermissionRequest') {
-        permissionRequests.push({
-          toolName: stringValue(value.tool_name),
-          toolUseId: stringValue(value.tool_use_id),
-          permissionMode: stringValue(value.permission_mode),
-        });
-      } else if (lifecycleEvent === 'PermissionDenied') {
-        permissionDenied += 1;
-      }
-    }
-
-    // Retain the existing broad aggregate hook metric for backward compatibility.
-    if (typeof value.type === 'string' && value.type.toLowerCase().includes('hook')) {
-      hookEvents.add(value.type);
-    }
-    for (const key of ['hook_name', 'hookEventName']) {
-      if (typeof value[key] === 'string') hookEvents.add(value[key] as string);
-    }
-
-    for (const nested of Object.values(value)) inspect(nested);
+    for (const nested of Object.values(value)) inspectToolUses(nested);
   };
 
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -77,8 +46,21 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
       continue;
     }
 
-    inspect(event);
+    inspectToolUses(event);
     if (!isRecord(event)) continue;
+
+    // `--include-hook-events` emits SDK lifecycle messages such as:
+    // { type: "system", subtype: "hook_started", hook_name, hook_event, ... }.
+    // `hook_event_name` belongs to hook stdin, not the stream-json lifecycle message.
+    if (event.type === 'system' && event.subtype === 'hook_started') {
+      const lifecycleEvent = stringValue(event.hook_event);
+      if (lifecycleEvent) {
+        hookEvents.add(lifecycleEvent);
+        hookEventSequence.push(lifecycleEvent);
+      }
+      const hookName = stringValue(event.hook_name);
+      if (hookName) hookEvents.add(hookName);
+    }
 
     const usage = isRecord(event.usage) ? event.usage : undefined;
     if (usage) {
@@ -103,9 +85,9 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
     turns,
     hookEvents: [...hookEvents].sort(),
     hookEventSequence,
-    permissionPrompts: permissionRequests.length,
-    permissionDenied,
-    permissionRequests,
+    permissionPrompts: 0,
+    permissionDenied: 0,
+    permissionRequests: [],
     parseErrors,
   };
 }
