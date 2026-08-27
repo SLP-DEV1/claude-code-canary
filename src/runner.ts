@@ -4,8 +4,9 @@ import path from 'node:path';
 import type { Scenario } from './config.js';
 import { evaluateExpectations } from './evaluate.js';
 import { createDetachedWorktree, getChangedFiles, getRepoRoot, getTrackedChanges, resolveCommit } from './git.js';
-import { parseStreamMetrics } from './metrics.js';
+import { extractStreamErrors, parseStreamMetrics } from './metrics.js';
 import { runShellCommand, spawnCapture } from './process.js';
+import { redactSensitiveText } from './record.js';
 import type { CommandSummary, ProcessResult, RunResult } from './types.js';
 
 export interface PreparedRun {
@@ -42,6 +43,13 @@ function summarize(command: string, result: ProcessResult): CommandSummary {
 
 function safeSlug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'run';
+}
+
+function diagnosticText(value: string, maxLength = 800): string {
+  return redactSensitiveText(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
 }
 
 async function writeArtifact(repoRoot: string, result: RunResult, label?: string): Promise<string> {
@@ -135,6 +143,16 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       if (claudeResult.timedOut) failures.push(`Claude timed out after ${scenario.claude.timeout_seconds}s`);
       if (claudeResult.outputTruncated) failures.push('Claude output exceeded Canary\'s 16 MiB capture limit; refusing to evaluate incomplete stream-json output.');
       if (claudeResult.code !== 0) failures.push(`Claude exited with code ${claudeResult.code}`);
+
+      for (const error of extractStreamErrors(claudeResult.stdout)) {
+        const diagnostic = diagnosticText(error);
+        if (diagnostic) failures.push(`Claude error: ${diagnostic}`);
+      }
+
+      if (claudeResult.code !== 0 && claudeResult.stderr.trim()) {
+        const diagnostic = diagnosticText(claudeResult.stderr);
+        if (diagnostic) failures.push(`Claude stderr: ${diagnostic}`);
+      }
     }
 
     const metrics = parseStreamMetrics(claudeResult.stdout);
