@@ -44,6 +44,9 @@ jobs:
         run: |
           node --check scripts/check-version-sync.mjs
           node --check scripts/set-version.mjs
+          node --check scripts/action-runner.mjs
+          node --check scripts/pr-comment.mjs
+          node --check scripts/ensure-pr-refs.mjs
           node --check scripts/live-e2e.mjs
           node --check scripts/live-provider-e2e.mjs
       - name: Smoke-test public CLI commands
@@ -55,6 +58,10 @@ jobs:
           const cases = [
             [['--help'], 'Usage: claude-canary'],
             [['--version'], expectedVersion],
+            [['pr-check', '--help'], 'two Git refs'],
+            [['baseline', '--help'], 'known-good metric baselines'],
+            [['baseline', 'update', '--help'], 'save its reviewed metric baseline'],
+            [['baseline', 'check', '--help'], 'committed known-good metric baseline'],
             [['plugin-init', '--help'], 'generate smoke-test scenarios'],
             [['plugin-suite', '--help'], 'Run every generated plugin smoke scenario'],
             [['plugin-matrix', '--help'], 'Test one Claude Code plugin'],

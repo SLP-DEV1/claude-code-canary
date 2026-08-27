@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 
-const MODES = new Set(['compare', 'run', 'plugin-matrix', 'plugin-suite']);
+const MODES = new Set(['compare', 'run', 'pr-check', 'baseline-check', 'plugin-matrix', 'plugin-suite']);
 const SUMMARY_LIMIT = 60_000;
 
 function env(name, fallback = '') {
@@ -53,6 +53,18 @@ export function buildCliArgs(config) {
     }
     case 'run':
       return ['run', config.scenario || '.canary/basic.canary.yml'];
+    case 'pr-check':
+      return [
+        'pr-check',
+        config.scenario || '.canary/basic.canary.yml',
+        '--base', config.baseRef || 'origin/main',
+        '--head', config.headRef || 'HEAD',
+      ];
+    case 'baseline-check': {
+      const args = ['baseline', 'check', config.scenario || '.canary/basic.canary.yml'];
+      if (config.baseline) args.push('--baseline', config.baseline);
+      return args;
+    }
     case 'plugin-matrix': {
       if (!config.plugin) throw new Error('plugin is required when mode=plugin-matrix.');
       const args = ['plugin-matrix', config.scenario || '.canary/plugin-smoke.canary.yml', '--plugin', config.plugin, ...selectorArgs(config)];
@@ -154,6 +166,9 @@ export function readConfig() {
     scenario: env('CANARY_SCENARIO'),
     from: env('CANARY_FROM'),
     to: env('CANARY_TO'),
+    baseRef: env('CANARY_BASE_REF'),
+    headRef: env('CANARY_HEAD_REF'),
+    baseline: env('CANARY_BASELINE'),
     plugin: env('CANARY_PLUGIN'),
     suite: env('CANARY_SUITE'),
     versions: parseVersions(env('CANARY_VERSIONS')),
@@ -164,8 +179,21 @@ export function readConfig() {
   };
 }
 
+export async function hydratePullRequestRefs(config, eventPath = process.env.GITHUB_EVENT_PATH) {
+  if (config.mode !== 'pr-check' || (config.baseRef && config.headRef)) return config;
+  let event = {};
+  if (eventPath) {
+    try { event = JSON.parse(await readFile(eventPath, 'utf8')); } catch { event = {}; }
+  }
+  return {
+    ...config,
+    baseRef: config.baseRef || event?.pull_request?.base?.sha || 'origin/main',
+    headRef: config.headRef || event?.pull_request?.head?.sha || 'HEAD',
+  };
+}
+
 async function main() {
-  const config = readConfig();
+  const config = await hydratePullRequestRefs(readConfig());
   const workspace = path.resolve(env('GITHUB_WORKSPACE', process.cwd()));
   const actionPath = path.resolve(env('GITHUB_ACTION_PATH', path.join(import.meta.dirname, '..')));
   const resultsDir = path.join(workspace, '.canary', 'results');

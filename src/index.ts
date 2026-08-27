@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
+import { checkBaseline, updateBaseline } from './baseline.js';
 import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
@@ -13,6 +14,7 @@ import { fetchPublishedVersionsBetween } from './release-catalog.js';
 import { finishRecording, startRecording } from './record.js';
 import { createReproBundle } from './repro.js';
 import { evaluateComparisonRegressions } from './regressions.js';
+import { runPrCheck } from './pr-check.js';
 import { formatComparison, formatRun } from './report.js';
 import { runScenario } from './runner.js';
 import { DEFAULT_SCENARIO } from './template.js';
@@ -221,6 +223,73 @@ program.command('compare')
       ? JSON.stringify({ baseline, candidate, regressions, passed }, null, 2)
       : formatComparison(baseline, candidate, regressions.failures));
     if (!passed) process.exitCode = 1;
+  });
+
+program.command('pr-check')
+  .description('Compare the same scenario across two Git refs with one Claude executable')
+  .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
+  .option('--base <ref>', 'baseline Git ref', 'origin/main')
+  .option('--head <ref>', 'candidate Git ref', 'HEAD')
+  .option('-e, --executable <path>', 'override Claude executable for both refs')
+  .option('--json', 'print JSON instead of the Markdown report', false)
+  .action(async (scenarioPath: string, options: { base: string; head: string; executable?: string; json: boolean }) => {
+    const scenario = await loadScenario(scenarioPath);
+    const result = await runPrCheck(scenario, {
+      cwd: process.cwd(),
+      baseRef: options.base,
+      headRef: options.head,
+      executableOverride: options.executable,
+    });
+    if (options.json) console.log(JSON.stringify(result, null, 2));
+    else console.log((await readFile(result.reportPath, 'utf8')).trimEnd() + '\n\nReport: ' + result.reportPath);
+    if (!result.passed) process.exitCode = 1;
+  });
+
+const baselineCommand = program.command('baseline')
+  .description('Create and check committed known-good metric baselines');
+
+baselineCommand.command('update')
+  .description('Run a passing scenario and save its reviewed metric baseline')
+  .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
+  .option('-o, --output <path>', 'baseline JSON path')
+  .option('-e, --executable <path>', 'override Claude executable')
+  .option('--json', 'print JSON result', false)
+  .action(async (scenarioPath: string, options: { output?: string; executable?: string; json: boolean }) => {
+    const result = await updateBaseline(scenarioPath, {
+      cwd: process.cwd(),
+      output: options.output,
+      executableOverride: options.executable,
+    });
+    if (options.json) console.log(JSON.stringify(result, null, 2));
+    else {
+      const lines = [
+        'Claude Code Canary — baseline updated',
+        '',
+        'Scenario: ' + result.snapshot.scenario,
+        'Baseline: ' + result.baselinePath,
+        'Source commit: ' + result.snapshot.gitCommit,
+        'Total tokens: ' + result.snapshot.metrics.totalTokens.toLocaleString('en-US'),
+        'Tool calls: ' + result.snapshot.metrics.toolCalls,
+      ];
+      console.log(lines.join('\n'));
+    }
+  });
+
+baselineCommand.command('check')
+  .description('Run once and compare against a committed known-good metric baseline')
+  .argument('[scenario]', 'scenario YAML', '.canary/basic.canary.yml')
+  .option('--baseline <path>', 'baseline JSON path (default: .canary/baselines/<scenario-name>.json)')
+  .option('-e, --executable <path>', 'override Claude executable')
+  .option('--json', 'print JSON instead of the Markdown report', false)
+  .action(async (scenarioPath: string, options: { baseline?: string; executable?: string; json: boolean }) => {
+    const result = await checkBaseline(scenarioPath, {
+      cwd: process.cwd(),
+      baseline: options.baseline,
+      executableOverride: options.executable,
+    });
+    if (options.json) console.log(JSON.stringify(result, null, 2));
+    else console.log((await readFile(result.reportPath, 'utf8')).trimEnd() + '\n\nReport: ' + result.reportPath);
+    if (!result.passed) process.exitCode = 1;
   });
 
 program.command('experiment')

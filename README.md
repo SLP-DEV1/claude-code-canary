@@ -66,12 +66,14 @@ claude-canary bisect .canary/plugin-smoke.canary.yml \
 | "This worked yesterday" | Record a good real task and replay it from the exact original commit. |
 | "How do I report this bug safely?" | Export a bounded, redacted reproduction bundle. |
 | "Did agent usage blow up?" | Track tool calls, tokens, duration and reported cost. |
+| "Did this PR make the agent worse?" | Compare base vs head with the same Claude executable and fail on configured deltas. |
+| "Can CI do this without paying for two runs every time?" | Commit a known-good metric baseline and execute only the candidate. |
 
 Canary is not another transcript viewer or generic model leaderboard. It is a **regression layer for real Claude Code workflows**.
 
 ## GitHub Action
 
-The v1 Action supports `compare`, `run`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`.
+The v1 Action supports `compare`, `run`, `pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`. `pr-check` can also update one stable pull-request comment with the regression table when `comment-pr: true` is enabled.
 
 A plugin compatibility gate can be as small as:
 
@@ -170,6 +172,27 @@ Canary labels `total_cost_usd` as **reported cost**. With a proxy or local model
 
 ## Core workflows
 
+### Gate a pull request
+
+Run the same scenario against the base and head Git refs with one Claude executable:
+
+```bash
+claude-canary pr-check .canary/basic.canary.yml \
+  --base origin/main \
+  --head HEAD
+```
+
+This catches repository changes that keep the final task green but increase tokens/cost/tool calls, introduce permission prompts, or change configured hook semantics. See [Pull request regression checks](docs/PR_CHECKS.md).
+
+### Check a committed baseline with one Claude run
+
+```bash
+claude-canary baseline update .canary/basic.canary.yml
+# commit .canary/baselines/<scenario-name>.json
+claude-canary baseline check .canary/basic.canary.yml
+```
+
+Baselines use the same regression thresholds while cutting recurring CI from two Claude runs to one. A SHA-256 of the scenario prevents stale snapshots from silently passing after the scenario changes. See [Committed baselines](docs/BASELINES.md).
 ### Compare two Claude Code releases
 
 ```bash
@@ -367,6 +390,8 @@ init             Create a starter scenario
 validate         Validate scenario YAML without spending tokens
 run              Run one deterministic scenario
 compare          Compare two executables or releases
+pr-check         Compare one Claude executable across two Git refs
+baseline         Create/check committed known-good metric baselines
 bisect           Find the first bad executable/release
 experiment       A/B test Claude Code configuration variants
 record / save    Capture a successful real task as a scenario
@@ -386,6 +411,8 @@ Run `claude-canary <command> --help` for command-specific flags.
 | Guide | What it covers |
 | --- | --- |
 | [GitHub Action](docs/GITHUB_ACTION.md) | Marketplace usage, modes, inputs, outputs and CI security |
+| [Pull request checks](docs/PR_CHECKS.md) | Base-vs-head regression gates and optional stable PR comments |
+| [Committed baselines](docs/BASELINES.md) | One-run CI against reviewed known-good metrics |
 | [Plugin suites](docs/PLUGIN_SUITE.md) | Full release × plugin-surface matrices |
 | [Plugin smoke generator](docs/PLUGIN_SMOKE_GENERATOR.md) | Discovery rules and generated scenarios |
 | [Plugin compatibility](docs/PLUGIN_COMPATIBILITY.md) | Focused plugin matrices and isolation |

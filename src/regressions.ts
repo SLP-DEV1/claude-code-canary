@@ -1,9 +1,13 @@
 import type { Scenario } from './config.js';
-import type { RunResult } from './types.js';
+import type { RunMetrics } from './types.js';
 
 export interface ComparisonRegressionResult {
   passed: boolean;
   failures: string[];
+}
+
+export interface RegressionComparable {
+  metrics: RunMetrics;
 }
 
 function percentIncrease(baseline: number, candidate: number): number | undefined {
@@ -74,8 +78,8 @@ function firstSequenceDifference(baseline: string[], candidate: string[]): strin
 
 export function evaluateComparisonRegressions(
   scenario: Scenario,
-  baseline: RunResult,
-  candidate: RunResult,
+  baseline: RegressionComparable,
+  candidate: RegressionComparable,
 ): ComparisonRegressionResult {
   const thresholds = scenario.regressions;
   const failures: string[] = [];
