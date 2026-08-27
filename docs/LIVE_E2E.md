@@ -32,14 +32,14 @@ The repository's scheduled/manual workflow does **not** require an Anthropic sub
 
 Preferred provider path:
 
-1. **Gemini** using stable `gemini-2.5-flash-lite` when `GEMINI_API_KEY` is configured
-2. **OpenRouter** using `openrouter/free` only when the selected primary reports a recognizable rate/quota/capacity limit
+1. **Gemini** using stable `gemini-2.5-flash` when `GEMINI_API_KEY` is configured
+2. **OpenRouter** using `openrouter/free` only when the selected primary reports a recognizable rate/quota/capacity/availability failure
 
-For backward compatibility, Groq remains supported when no Gemini key is configured. In that case `openai/gpt-oss-120b` is attempted before the same OpenRouter capacity fallback. If only OpenRouter is configured, the wrapper starts directly on OpenRouter.
+For backward compatibility, Groq remains supported when no Gemini key is configured. In that case `openai/gpt-oss-120b` is attempted before the same OpenRouter fallback. If only OpenRouter is configured, the wrapper starts directly on OpenRouter.
 
-Gemini is preferred for hosted free E2E because Gemini 2.5 Flash-Lite has a 1,048,576-token input window, a 65,536-token output window and function calling. Current Claude Code headless requests can contain tens of thousands of input tokens before the task itself begins. By contrast, observed Groq Free runs have hit the provider's input-token-per-minute allowance before Claude can execute the first task. Groq is therefore retained as a compatibility path rather than the recommended hosted primary.
+Gemini is preferred for hosted free E2E because Gemini 2.5 Flash has a 1,048,576-token input window, a 65,536-token output window, function calling and a free Standard tier. Current Claude Code headless requests can contain tens of thousands of input tokens before the task itself begins. By contrast, observed Groq Free runs have hit the provider's input-token-per-minute allowance before Claude can execute the first task. Groq is therefore retained as a compatibility path rather than the recommended hosted primary.
 
-The workflow intentionally does not retry ordinary Canary failures through another provider. A broken assertion, Claude CLI incompatibility, plugin failure, malformed stream, tool-protocol error, or other non-capacity failure remains red. This prevents fallback from hiding real regressions.
+The workflow intentionally does not retry ordinary Canary failures through another provider. A broken assertion, Claude CLI incompatibility, plugin failure, malformed stream, tool-protocol error, or other non-provider failure remains red. This prevents fallback from hiding real regressions. Provider capacity/availability errors such as 429/503, quota exhaustion, temporary overload, or an explicit upstream message that a model is no longer available to new users are eligible for OpenRouter fallback. Arbitrary 404s and model typos are not treated as fallback conditions.
 
 OpenRouter's free-model router may select different free models over time, so a fallback run is useful for transport/CLI compatibility but is less model-deterministic than the Gemini primary route. Free-provider quotas can change; inspect the provider's own quota dashboard when a capacity failure occurs.
 
@@ -85,7 +85,7 @@ The provider wrapper expects a built `ccasr` CLI through `CLAUDE_CANARY_CCASR_CL
 
 ```bash
 export GEMINI_API_KEY=...
-export OPENROUTER_API_KEY=...   # optional capacity fallback
+export OPENROUTER_API_KEY=...   # optional capacity/availability fallback
 export CLAUDE_CANARY_CCASR_CLI=/path/to/claude-code-agent-sdk-router/dist/cli.js
 node scripts/live-provider-e2e.mjs run core
 ```
@@ -100,12 +100,12 @@ node scripts/live-provider-e2e.mjs run core
 
 Optional model overrides:
 
-- `CLAUDE_CANARY_GEMINI_MODEL` defaults to `gemini-2.5-flash-lite`
+- `CLAUDE_CANARY_GEMINI_MODEL` defaults to `gemini-2.5-flash`
 - `CLAUDE_CANARY_GROQ_MODEL` defaults to `openai/gpt-oss-120b`
 - `CLAUDE_CANARY_OPENROUTER_MODEL` defaults to `openrouter/free`
 - `CLAUDE_CANARY_PROVIDER_PORT` defaults to `3456`
 
-When Gemini is configured it is preferred. Groq is only selected as the primary when Gemini is absent. OpenRouter is used directly when it is the only configured provider, or as the capacity fallback from the selected primary.
+When Gemini is configured it is preferred. Groq is only selected as the primary when Gemini is absent. OpenRouter is used directly when it is the only configured provider, or as the capacity/availability fallback from the selected primary.
 
 ## GitHub Actions
 
@@ -114,7 +114,7 @@ When Gemini is configured it is preferred. Groq is only selected as the primary 
 Configure repository Actions secrets:
 
 - `GEMINI_API_KEY` — recommended primary
-- `OPENROUTER_API_KEY` — recommended capacity fallback
+- `OPENROUTER_API_KEY` — recommended capacity/availability fallback
 - `GROQ_API_KEY` — optional backward-compatible provider
 
 At least one is required for a manual run. If no secret exists, a scheduled run records a clear skip notice instead of attempting model access. A **manual** run without provider authentication fails deliberately so a skipped manual run can never be mistaken for release evidence. No secret value is printed.
