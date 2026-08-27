@@ -6,6 +6,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ### Added
 
+- Add `team-run` for real interactive Claude Code agent-team observation with privacy-safe teammate/task/message lifecycle snapshots and deterministic expectations.
+- Add `team-compare`, a public agent-team result schema/API, bounded observer logs, explicit non-TTY `unsupported` results, and exact-release execution through Canary's verified Claude Code cache.
 - Plugin discovery and compatibility suites now understand Claude Code LSP servers, background monitors, and plugin dependency declarations. LSPs get generated release smoke scenarios; monitors and dependency constraints are tracked as static, side-effect-free compatibility surfaces.
 - Extended plugin discovery is exported through the public TypeScript API.
 - add protocol-native stdio MCP contract snapshots and checks for tools, JSON schemas, prompts, resources, resource templates and capabilities

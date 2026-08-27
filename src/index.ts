@@ -3,6 +3,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
 import { checkBaseline, updateBaseline } from './baseline.js';
+import { compareAgentTeamResults, formatAgentTeamComparison, formatAgentTeamRun, loadAgentTeamResult, loadAgentTeamScenario, runAgentTeam } from './agent-team.js';
 import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
 import { formatDoctor, runDoctor } from './doctor.js';
@@ -361,6 +362,39 @@ program.command('experiment')
     });
     console.log(options.json ? JSON.stringify(result, null, 2) : formatExperiment(result));
     if (result.candidate.aggregate.passRate < result.baseline.aggregate.passRate) process.exitCode = 1;
+  });
+
+program.command('team-run')
+  .description('Observe a real interactive Claude Code agent team')
+  .argument('[scenario]', 'agent-team scenario YAML', '.canary/team.team.yml')
+  .option('--version <version>', 'run an exact/stable/latest Claude Code release from Canary cache')
+  .option('--platform <id>', 'override release platform id for --version')
+  .option('-e, --executable <path>', 'override Claude executable instead of --version')
+  .option('--json', 'print JSON result after the interactive session', false)
+  .action(async (scenarioPath: string, options: { version?: string; platform?: string; executable?: string; json: boolean }) => {
+    const scenario = await loadAgentTeamScenario(scenarioPath);
+    const result = await runAgentTeam(scenario, {
+      cwd: process.cwd(),
+      version: options.version,
+      platform: options.platform,
+      executableOverride: options.executable,
+      onStatus: (message) => console.error(message),
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatAgentTeamRun(result));
+    if (result.status !== 'passed') process.exitCode = 1;
+  });
+
+program.command('team-compare')
+  .description('Compare two saved agent-team observation artifacts')
+  .argument('<baseline>', 'baseline *-agent-team.json result')
+  .argument('<candidate>', 'candidate *-agent-team.json result')
+  .option('--json', 'print JSON comparison', false)
+  .action(async (baselinePath: string, candidatePath: string, options: { json: boolean }) => {
+    const baseline = await loadAgentTeamResult(baselinePath);
+    const candidate = await loadAgentTeamResult(candidatePath);
+    const result = compareAgentTeamResults(baseline, candidate);
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatAgentTeamComparison(result));
+    if (!result.passed) process.exitCode = 1;
   });
 
 program.command('plugin-init')

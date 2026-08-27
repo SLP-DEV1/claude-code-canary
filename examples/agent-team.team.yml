@@ -1,0 +1,25 @@
+version: 1
+name: parallel-read-only-review
+prompt: |
+  Create an agent team with exactly two teammates named reviewer and tester.
+  Give reviewer a small read-only architecture inspection task.
+  Give tester a small read-only test-coverage inspection task.
+  Have both report back, complete their tasks, and shut down cleanly.
+
+claude:
+  permission_mode: dontAsk
+  timeout_seconds: 1200
+
+expect:
+  expected_teammates:
+    - reviewer
+    - tester
+  deny_unexpected_teammates: true
+  deny_duplicate_spawns: true
+  min_teammates: 2
+  min_tasks_created: 2
+  min_tasks_completed: 2
+  min_messages_sent: 1
+  require_all_tasks_completed: true
+  require_all_teammates_idle: true
+  max_stop_failures: 0

@@ -45,39 +45,36 @@ claude-canary mcp-compare .canary/mcp/github.canary.yml --base 2.1.120 --candida
 
 **Acceptance:** a server schema change, a missing tool, a Tool Search regression or an unexpected mutating invocation can fail CI without depending on subjective output grading.
 
-### P0 — Plugin surface coverage: LSP, monitors and dependencies
+### P0 — Plugin surface coverage: LSP, monitors and dependencies *(implemented for v1.2)*
 
-Extend `plugin-init`, `plugin-matrix` and `plugin-suite` beyond skills/commands/hooks/MCP.
+`plugin-init`, `plugin-matrix` and `plugin-suite` now cover the current plugin declaration surfaces beyond skills/commands/hooks/MCP:
 
-Planned coverage:
+- `.lsp.json` and manifest-defined LSP discovery with dedicated read-only release smoke scenarios;
+- LSP command/extension contract freshness checks;
+- monitor discovery/validation without automatically launching unsandboxed background commands;
+- plugin dependency name/version/marketplace constraint tracking;
+- stale-suite detection when any of those declarations changes;
+- legacy discovery metadata compatibility for plugins that do not use the new surfaces.
 
-- `.lsp.json` discovery and load validation
-- LSP smoke scenarios for definition lookup, references and diagnostics
-- monitor startup, notification delivery and clean shutdown
-- monitor availability/unsupported-host reporting
-- plugin dependency resolution and semver constraints
-- plugin marketplace `strict` behavior
-- plugin source pinning and cache/update compatibility
-- clear `unsupported`, `skipped`, `failed` and `passed` states instead of collapsing all non-passes together
+Runtime dependency resolution remains Claude Code's responsibility, and monitor execution is intentionally not automated by the compatibility scanner. See `docs/PLUGIN_SUITE.md`.
 
-**Acceptance:** a plugin author can run one suite and see whether every supported component still loads and behaves correctly across recent Claude Code releases.
+**Acceptance:** a plugin author can run one suite and see whether every safely testable supported component still loads and whether static monitor/dependency contracts drift across recent Claude Code releases.
 
-### P0 — Agent-team regression testing
+### P0 — Agent-team regression testing *(implemented for v1.2; interactive observer)*
 
-Add deterministic observability for Claude Code agent teams while keeping the feature explicitly marked experimental when upstream marks it experimental.
+Canary now has a dedicated real-team path instead of pretending `claude -p` subagents are agent teams:
 
-Planned signals:
+- `team-run` uses an interactive TTY session and forces the upstream experimental team flag only for that child process;
+- exact Claude Code releases can be selected through Canary's authenticated release cache;
+- observation-only hooks capture teammate spawn/name/type, task create/complete, message counts, idle transitions and stop failures;
+- duplicate/orphaned teammates and incomplete tasks become deterministic assertions;
+- `team-compare` detects structural delegation/coordination regressions between saved artifacts;
+- event capture is bounded and privacy-first: no Agent prompt, SendMessage body, task description, assistant transcript or environment value is persisted;
+- non-interactive environments return an explicit `unsupported` result rather than silently downgrading to ordinary subagents.
 
-- teammate spawn count and identities/types
-- task assignment and completion states
-- unexpected duplicate/orphaned teammates
-- inter-agent message counts and ordering where observable
-- team completion vs lead-only completion
-- total turns/tokens/tool calls across the team
-- coordination latency and timeout classification
-- base-vs-candidate regression thresholds for team fan-out and resource use
+Aggregate team-wide token/tool accounting is intentionally deferred until upstream exposes it through a documented privacy-safe surface. See `docs/AGENT_TEAMS.md`.
 
-**Acceptance:** Canary can detect that a Claude Code release changed delegation/coordination behavior even when the final file output still passes.
+**Acceptance:** Canary can detect that a Claude Code release changed observable teammate/task coordination behavior even when final repository output would still pass.
 
 ### P1 — Extension compatibility doctor
 

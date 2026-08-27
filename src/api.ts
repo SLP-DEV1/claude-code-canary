@@ -1,3 +1,26 @@
+export {
+  AgentTeamScenarioSchema,
+  parseAgentTeamScenario,
+  loadAgentTeamScenario,
+  aggregateAgentTeamEvents,
+  evaluateAgentTeamExpectations,
+  runAgentTeam,
+  loadAgentTeamResult,
+  compareAgentTeamResults,
+  formatAgentTeamRun,
+  formatAgentTeamComparison,
+} from './agent-team.js';
+export type {
+  AgentTeamScenario,
+  AgentTeamEvent,
+  AgentTeamEventKind,
+  AgentTeamMember,
+  AgentTeamMetrics,
+  AgentTeamRunResult,
+  AgentTeamComparisonResult,
+  RunAgentTeamOptions,
+} from './agent-team.js';
+
 export { ScenarioSchema, loadScenario, parseScenario } from './config.js';
 export type { Scenario } from './config.js';
 

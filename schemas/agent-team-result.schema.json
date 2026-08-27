@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/agent-team-result.schema.json",
+  "title": "Claude Code Canary agent-team run result",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "canaryVersion",
+    "experimental",
+    "status",
+    "scenario",
+    "executable",
+    "gitCommit",
+    "exitCode",
+    "signal",
+    "timedOut",
+    "failures",
+    "metrics",
+    "events",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "agent-team-run" },
+    "canaryVersion": { "type": "string", "minLength": 1 },
+    "experimental": { "const": true },
+    "status": { "enum": ["passed", "failed", "unsupported"] },
+    "scenario": { "type": "string", "minLength": 1 },
+    "executable": { "type": "string", "minLength": 1 },
+    "claudeVersion": { "type": "string", "minLength": 1 },
+    "gitCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "exitCode": { "type": ["integer", "null"] },
+    "signal": { "type": ["string", "null"] },
+    "timedOut": { "type": "boolean" },
+    "failures": { "type": "array", "items": { "type": "string" } },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "teammateCount",
+        "teammates",
+        "duplicateTeammates",
+        "idleTeammates",
+        "orphanedTeammates",
+        "tasksCreated",
+        "tasksCompleted",
+        "incompleteTaskIds",
+        "completedWithoutCreateIds",
+        "messagesSent",
+        "stopFailures"
+      ],
+      "properties": {
+        "teammateCount": { "type": "integer", "minimum": 0 },
+        "teammates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "agentType": { "type": "string", "minLength": 1 },
+              "model": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "duplicateTeammates": { "type": "array", "items": { "type": "string" } },
+        "idleTeammates": { "type": "array", "items": { "type": "string" } },
+        "orphanedTeammates": { "type": "array", "items": { "type": "string" } },
+        "tasksCreated": { "type": "integer", "minimum": 0 },
+        "tasksCompleted": { "type": "integer", "minimum": 0 },
+        "incompleteTaskIds": { "type": "array", "items": { "type": "string" } },
+        "completedWithoutCreateIds": { "type": "array", "items": { "type": "string" } },
+        "messagesSent": { "type": "integer", "minimum": 0 },
+        "stopFailures": { "type": "integer", "minimum": 0 },
+        "coordinationDurationMs": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "at"],
+        "properties": {
+          "kind": { "enum": ["teammate_spawned", "teammate_idle", "task_created", "task_completed", "message_sent", "stop_failure"] },
+          "at": { "type": "string", "format": "date-time" },
+          "teammate": { "type": "string" },
+          "agentType": { "type": "string" },
+          "model": { "type": "string" },
+          "taskId": { "type": "string" },
+          "recipient": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "artifactPath": { "type": "string" }
+  },
+  "additionalProperties": false
+}
