@@ -1,0 +1,39 @@
+name: Prepare v2 version
+
+on:
+  push:
+    branches:
+      - feat/v2-platform
+    paths:
+      - .github/workflows/prepare-v2-version.yml
+      - scripts/set-version.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/v2-platform
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+      - name: Synchronize v2.0.0 metadata
+        run: node scripts/set-version.mjs 2.0.0
+      - name: Commit synchronized metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package.json package-lock.json src/version.ts
+          if git diff --cached --quiet; then
+            echo "Version metadata already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: prepare v2.0.0 version"
+          git push origin HEAD:feat/v2-platform
