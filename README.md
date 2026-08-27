@@ -16,6 +16,7 @@
   <a href="docs/PLUGIN_SUITE.md">Plugin suites</a> ·
   <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·
   <a href="docs/AGENT_TEAMS.md">Agent teams</a> ·
+  <a href="docs/DOCTOR.md">Doctor</a> ·
   <a href="docs/DISTRIBUTION.md">Distribution</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
@@ -72,6 +73,7 @@ claude-canary bisect .canary/plugin-smoke.canary.yml \
 | "Can CI do this without paying for two runs every time?" | Commit a known-good metric baseline and execute only the candidate. |
 | "Did my MCP server silently change?" | Snapshot tools/prompts/resources and fail on removed tools, schema changes or capability regressions. |
 | "Did Claude change how my agent team coordinates?" | Observe real interactive teammate/task lifecycle signals and compare privacy-safe structural snapshots. |
+| "Is this host actually ready for my extensions?" | Run a secret-free Doctor preflight for provider mode, plugins, LSP binaries, project MCP transports and agent-team constraints. |
 
 Canary is not another transcript viewer or generic model leaderboard. It is a **regression layer for real Claude Code workflows**.
 
@@ -133,6 +135,15 @@ claude-canary doctor
 ```
 
 For repository development, clone this repo and run `npm ci --ignore-scripts && npm run build`.
+
+Before an extension-heavy run, use the machine-readable compatibility preflight:
+
+```bash
+claude-canary doctor --json
+claude-canary doctor --plugin ./my-plugin --json
+```
+
+It reports only non-secret configuration shape: provider mode, credential-presence booleans, plugin component types, LSP/stdio-MCP executable availability, project MCP transport types and agent-team/TTY warnings. API keys, OAuth tokens, base URLs, MCP URLs/headers and environment values are never emitted. See [Extension compatibility doctor](docs/DOCTOR.md).
 
 Then create and run a scenario inside the repository you want to test:
 

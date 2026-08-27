@@ -76,24 +76,20 @@ Aggregate team-wide token/tool accounting is intentionally deferred until upstre
 
 **Acceptance:** Canary can detect that a Claude Code release changed observable teammate/task coordination behavior even when final repository output would still pass.
 
-### P1 — Extension compatibility doctor
+### P1 — Extension compatibility doctor *(implemented for v1.2)*
 
-Expand `doctor` into a machine-readable environment preflight.
+`doctor --json` now emits a versioned, secret-free environment preflight:
 
-```bash
-claude-canary doctor --json
-```
+- Claude Code/Canary/Node/platform/architecture metadata and executable source;
+- provider mode inferred from configuration-variable presence without exposing values;
+- plugin component counts, dependencies and discovery warnings;
+- LSP executable availability without launching language servers;
+- bounded project `.mcp.json` transport discovery plus stdio executable checks without contacting remote servers;
+- experimental agent-team configuration with TTY/provider compatibility warnings;
+- hard failures for missing required binaries, malformed extension configuration and conflicting provider flags;
+- public TypeScript API and `schemas/doctor-result.schema.json` contract.
 
-Report only non-secret compatibility metadata:
-
-- Claude Code version and executable source
-- Canary version
-- Node/platform/architecture
-- configured plugin component types
-- MCP transport availability
-- required external binaries for LSP/plugin scenarios
-- experimental feature flags relevant to a scenario
-- warnings for unsupported host/provider feature combinations
+Warnings remain non-fatal; hard compatibility failures make `doctor` exit non-zero. See `docs/DOCTOR.md`.
 
 ---
 

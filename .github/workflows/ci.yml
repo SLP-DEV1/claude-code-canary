@@ -58,6 +58,7 @@ jobs:
           const cases = [
             [['--help'], 'Usage: claude-canary'],
             [['--version'], expectedVersion],
+            [['doctor', '--help'], 'machine-readable compatibility preflight JSON'],
             [['pr-check', '--help'], 'two Git refs'],
             [['baseline', '--help'], 'known-good metric baselines'],
             [['baseline', 'update', '--help'], 'save its reviewed metric baseline'],
