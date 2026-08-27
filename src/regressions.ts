@@ -119,21 +119,21 @@ export function evaluateComparisonRegressions(
   evaluateAbsoluteIncrease(
     failures,
     'Permission prompt',
-    baseline.metrics.permissionPrompts,
-    candidate.metrics.permissionPrompts,
+    baseline.metrics.permissionPrompts ?? 0,
+    candidate.metrics.permissionPrompts ?? 0,
     thresholds.max_permission_prompts_increase,
   );
   evaluateAbsoluteIncrease(
     failures,
     'Permission denied',
-    baseline.metrics.permissionDenied,
-    candidate.metrics.permissionDenied,
+    baseline.metrics.permissionDenied ?? 0,
+    candidate.metrics.permissionDenied ?? 0,
     thresholds.max_permission_denied_increase,
   );
 
   if (thresholds.require_same_hook_sequence) {
-    const baselineSequence = baseline.metrics.hookEventSequence;
-    const candidateSequence = candidate.metrics.hookEventSequence;
+    const baselineSequence = baseline.metrics.hookEventSequence ?? [];
+    const candidateSequence = candidate.metrics.hookEventSequence ?? [];
     const same = baselineSequence.length === candidateSequence.length
       && baselineSequence.every((event, index) => event === candidateSequence[index]);
     if (!same) {
