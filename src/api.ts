@@ -45,6 +45,35 @@ export type {
   RunPluginSuiteOptions,
 } from './plugin-suite.js';
 
+export {
+  McpContractSchema,
+  loadMcpContract,
+  inspectMcpContract,
+  evaluateMcpExpectations,
+  compareMcpSnapshots,
+  writeMcpSnapshot,
+  loadMcpSnapshot,
+  checkMcpContract,
+  compareMcpContracts,
+  defaultMcpSnapshotPath,
+  formatMcpCheckMarkdown,
+  formatMcpComparisonMarkdown,
+} from './mcp-contract.js';
+export type {
+  McpContract,
+  McpContractSnapshot,
+  McpToolSnapshot,
+  McpPromptSnapshot,
+  McpResourceSnapshot,
+  McpResourceTemplateSnapshot,
+  McpExpectationResult,
+  McpComparisonResult,
+  McpCheckResult,
+  McpSnapshotOptions,
+  McpCheckOptions,
+  McpCompareOptions,
+} from './mcp-contract.js';
+
 export { createReproBundle } from './repro.js';
 export {
   cachedClaudePath,
