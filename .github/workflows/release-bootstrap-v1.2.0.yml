@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   bootstrap:
-    if: github.event.head_commit.message == 'chore: bootstrap v1.2.0 release'
+    if: "${{ github.event.head_commit.message == 'chore: bootstrap v1.2.0 release' }}"
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: v1.2.0
