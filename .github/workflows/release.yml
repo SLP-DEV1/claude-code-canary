@@ -12,6 +12,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
   id-token: write
 
@@ -44,6 +45,14 @@ jobs:
           ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 0
 
+      - name: Capture immutable release commit
+        id: commit
+        shell: bash
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Release commit: $sha"
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
@@ -71,15 +80,142 @@ jobs:
           if (process.env.RELEASE_TAG !== expected) {
             throw new Error(`Release tag ${process.env.RELEASE_TAG} does not match package version ${pkg.version}. Expected ${expected}.`);
           }
-          console.log(`Publishing ${pkg.name}@${pkg.version} from ${process.env.RELEASE_TAG}.`);
+          console.log(`Validated ${pkg.name}@${pkg.version} from ${process.env.RELEASE_TAG}.`);
+          NODE
+
+      - name: Require successful full Live Claude E2E on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const sha = process.env.RELEASE_SHA;
+          const endpoint = `https://api.github.com/repos/${repo}/actions/workflows/live-e2e.yml/runs?per_page=100`;
+          const response = await fetch(endpoint, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              Authorization: `Bearer ${process.env.GH_TOKEN}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'claude-code-canary-release-gate',
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`Could not query Live Claude E2E evidence: HTTP ${response.status} ${await response.text()}`);
+          }
+          const data = await response.json();
+          const match = data.workflow_runs?.find((run) =>
+            run.head_sha === sha &&
+            run.conclusion === 'success' &&
+            run.display_title === 'Live Claude E2E (full)'
+          );
+          if (!match) {
+            throw new Error(
+              `Release blocked: commit ${sha} has no successful \"Live Claude E2E (full)\" run. ` +
+              'Run the Live Claude E2E workflow in full mode on this exact commit before tagging/publishing.'
+            );
+          }
+          console.log(`Release gate satisfied by Live Claude E2E run ${match.id}: ${match.html_url}`);
+          NODE
+
+      - name: Check whether this npm version is already published
+        id: npm
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const spec = `${pkg.name}@${pkg.version}`;
+          let published = false;
+          try {
+            const raw = execFileSync('npm', ['view', spec, 'version', '--json'], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }).trim();
+            const value = JSON.parse(raw);
+            published = value === pkg.version || (Array.isArray(value) && value.includes(pkg.version));
+          } catch (error) {
+            const stderr = String(error?.stderr ?? '');
+            if (!/E404|404 Not Found|is not in this registry/i.test(stderr)) {
+              throw error;
+            }
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `package=${pkg.name}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+          console.log(published ? `${spec} is already published; publish will be skipped.` : `${spec} is not published yet.`);
           NODE
 
       - name: Publish package
+        if: steps.npm.outputs.published != 'true'
         env:
-          # OIDC Trusted Publishing is preferred. NPM_TOKEN exists only as an
-          # optional bootstrap fallback for the package's first publication.
+          # OIDC Trusted Publishing is preferred. NPM_TOKEN is retained only as
+          # an optional bootstrap fallback while the npm trusted publisher is configured.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
+
+      - name: Verify package is visible on npm
+        env:
+          PACKAGE_NAME: ${{ steps.npm.outputs.package }}
+          PACKAGE_VERSION: ${{ steps.npm.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            visible="$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --json 2>/dev/null || true)"
+            if [[ "$visible" == "\"$PACKAGE_VERSION\"" || "$visible" == "$PACKAGE_VERSION" ]]; then
+              echo "$PACKAGE_NAME@$PACKAGE_VERSION is visible on npm."
+              exit 0
+            fi
+            echo "npm registry has not exposed $PACKAGE_NAME@$PACKAGE_VERSION yet (attempt $attempt/5)."
+            sleep 3
+          done
+          echo "Published package could not be verified in the npm registry." >&2
+          exit 1
+
+      - name: Create GitHub Release if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const tag = process.env.RELEASE_TAG;
+          const sha = process.env.RELEASE_SHA;
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${process.env.GH_TOKEN}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'claude-code-canary-release',
+          };
+          const existing = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`, { headers });
+          if (existing.ok) {
+            const release = await existing.json();
+            console.log(`GitHub Release already exists: ${release.html_url}`);
+            process.exit(0);
+          }
+          if (existing.status !== 404) {
+            throw new Error(`Could not check GitHub Release state: HTTP ${existing.status} ${await existing.text()}`);
+          }
+          const created = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tag_name: tag,
+              target_commitish: sha,
+              name: `Claude Canary ${tag}`,
+              draft: false,
+              prerelease: false,
+              generate_release_notes: true,
+            }),
+          });
+          if (!created.ok) {
+            throw new Error(`Could not create GitHub Release: HTTP ${created.status} ${await created.text()}`);
+          }
+          const release = await created.json();
+          console.log(`Created GitHub Release: ${release.html_url}`);
+          NODE
 
       - name: Move floating major Action tag
         id: major
@@ -99,13 +235,17 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           MAJOR_TAG: ${{ steps.major.outputs.tag }}
+          RELEASE_SHA: ${{ steps.commit.outputs.sha }}
         shell: bash
         run: |
           {
-            echo "### npm release"
+            echo "### Claude Canary release"
             echo
             echo "- Exact tag: \`$RELEASE_TAG\`"
+            echo "- Commit: \`$RELEASE_SHA\`"
             echo "- npm package: \`claude-code-canary@${RELEASE_TAG#v}\`"
+            echo "- GitHub Release: created or already present"
+            echo "- Required release gate: successful \`Live Claude E2E (full)\` on the exact commit"
             echo "- Floating Action tag: \`$MAJOR_TAG\`"
             echo "- Provenance: npm Trusted Publishing/OIDC when configured"
           } >> "$GITHUB_STEP_SUMMARY"
