@@ -50,6 +50,18 @@ async function currentFileHash(file: string): Promise<string | null> {
   }
 }
 
+export function buildClaudeArgs(scenario: Scenario, extraClaudeArgs: string[] = []): string[] {
+  const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--verbose', '--no-session-persistence'];
+  if (scenario.claude.include_hook_events) args.push('--include-hook-events');
+  if (scenario.claude.model) args.push('--model', scenario.claude.model);
+  if (scenario.claude.permission_mode) args.push('--permission-mode', scenario.claude.permission_mode);
+  if (scenario.claude.max_turns !== undefined) args.push('--max-turns', String(scenario.claude.max_turns));
+  if (scenario.claude.max_budget_usd !== undefined) args.push('--max-budget-usd', String(scenario.claude.max_budget_usd));
+  args.push(...scenario.claude.args);
+  args.push(...extraClaudeArgs);
+  return args;
+}
+
 export async function filterFixtureChanges(
   worktreePath: string,
   changedFiles: string[],
@@ -112,14 +124,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
     };
 
     if (setupOk) {
-      const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--verbose', '--no-session-persistence'];
-      if (scenario.claude.include_hook_events) args.push('--include-hook-events');
-      if (scenario.claude.model) args.push('--model', scenario.claude.model);
-      if (scenario.claude.permission_mode) args.push('--permission-mode', scenario.claude.permission_mode);
-      if (scenario.claude.max_turns !== undefined) args.push('--max-turns', String(scenario.claude.max_turns));
-      if (scenario.claude.max_budget_usd !== undefined) args.push('--max-budget-usd', String(scenario.claude.max_budget_usd));
-      args.push(...scenario.claude.args);
-      args.push(...prepared?.extraClaudeArgs ?? []);
+      const args = buildClaudeArgs(scenario, prepared?.extraClaudeArgs ?? []);
 
       claudeResult = await spawnCapture(executable, args, {
         cwd: worktree.path,

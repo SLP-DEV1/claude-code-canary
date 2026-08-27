@@ -18,7 +18,7 @@ Claude Code changes. Your `CLAUDE.md`, hooks, plugins, MCP servers and permissio
 
 > **What broke, and which Claude Code release first broke it?**
 
-Canary runs the same scenario from the same Git commit in disposable worktrees, captures tool/token/cost/duration metrics, checks deterministic assertions, compares releases, bisects regressions and builds full plugin compatibility matrices.
+Canary runs the same scenario from the same Git commit in disposable worktrees, captures tool/token/reported-cost/duration metrics, checks deterministic assertions, compares releases, bisects regressions and builds full plugin compatibility matrices.
 
 ## The 30-second demo
 
@@ -129,6 +129,36 @@ cd /path/to/project
 claude-canary init
 claude-canary run .canary/basic.canary.yml
 ```
+
+## Custom and local model gateways
+
+Canary drives the **Claude Code CLI** rather than calling a model API directly. That means a Claude Code setup that already works through a compatible gateway can normally be exercised by Canary through the same CLI configuration and environment.
+
+A useful preflight check is:
+
+```bash
+claude -p "Reply exactly LOCAL_OK"
+```
+
+If that command reaches your configured gateway and succeeds, Canary can invoke the same `claude` executable from an isolated worktree:
+
+```bash
+claude-canary run .canary/basic.canary.yml
+```
+
+A manual end-to-end smoke test has successfully exercised this path on Windows:
+
+```text
+Claude Code
+  → Claude Code Router
+  → llama.cpp
+  → Qwen3.8-27B
+  → Claude Code Canary
+```
+
+This is a community/custom deployment path, not part of Canary's guarantee that historical **Claude Code releases** behave identically across third-party gateways. Proxy translation, model behavior and gateway routing can add their own sources of variance.
+
+Canary labels `total_cost_usd` as **reported cost**. With a proxy or local model, that value may be estimated, synthetic or otherwise unrelated to actual billing. Treat it as upstream accounting metadata unless your provider explicitly documents it as billable cost.
 
 ## Core workflows
 
