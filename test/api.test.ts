@@ -9,6 +9,8 @@ describe('v1 programmatic API', () => {
       'loadScenario',
       'parseScenario',
       'runScenario',
+      'runDoctorReport',
+      'detectProviderConfiguration',
       'AgentTeamScenarioSchema',
       'runAgentTeam',
       'compareAgentTeamResults',

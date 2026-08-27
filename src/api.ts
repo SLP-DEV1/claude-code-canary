@@ -21,6 +21,27 @@ export type {
   RunAgentTeamOptions,
 } from './agent-team.js';
 
+export {
+  runDoctor,
+  runDoctorReport,
+  formatDoctor,
+  detectProviderConfiguration,
+  findExecutable,
+} from './doctor.js';
+export type {
+  DoctorOptions,
+  DoctorReport,
+  DoctorWarning,
+  DoctorProviderMode,
+  DoctorProviderReport,
+  DoctorPluginReport,
+  DoctorMcpReport,
+  DoctorMcpServerReport,
+  DoctorMcpTransport,
+  DoctorBinaryRequirement,
+  DoctorBinaryKind,
+} from './doctor.js';
+
 export { ScenarioSchema, loadScenario, parseScenario } from './config.js';
 export type { Scenario } from './config.js';
 

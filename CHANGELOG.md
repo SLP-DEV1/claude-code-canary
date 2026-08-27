@@ -6,6 +6,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ### Added
 
+- Add `doctor --json` as a schema-versioned, secret-free extension compatibility preflight for provider mode, plugins, LSP binaries, project MCP transports and experimental agent-team constraints.
+- Export the structured Doctor API/schema and fail closed on missing required LSP/stdio-MCP executables, malformed project MCP configuration and conflicting provider flags without starting extension processes.
 - Add `team-run` for real interactive Claude Code agent-team observation with privacy-safe teammate/task/message lifecycle snapshots and deterministic expectations.
 - Add `team-compare`, a public agent-team result schema/API, bounded observer logs, explicit non-TTY `unsupported` results, and exact-release execution through Canary's verified Claude Code cache.
 - Plugin discovery and compatibility suites now understand Claude Code LSP servers, background monitors, and plugin dependency declarations. LSPs get generated release smoke scenarios; monitors and dependency constraints are tracked as static, side-effect-free compatibility surfaces.

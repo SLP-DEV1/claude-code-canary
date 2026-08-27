@@ -142,7 +142,7 @@ export function detectProviderConfiguration(env: NodeJS.ProcessEnv = process.env
   ] as const;
   const active = flags.filter(([name]) => envPresent(env, name));
   const customBaseUrl = envPresent(env, 'ANTHROPIC_BASE_URL');
-  const indicators = active.map(([name]) => name);
+  const indicators: string[] = active.map(([name]) => name);
   if (customBaseUrl) indicators.push('ANTHROPIC_BASE_URL');
 
   let mode: DoctorProviderMode;

@@ -6,7 +6,7 @@ import { checkBaseline, updateBaseline } from './baseline.js';
 import { compareAgentTeamResults, formatAgentTeamComparison, formatAgentTeamRun, loadAgentTeamResult, loadAgentTeamScenario, runAgentTeam } from './agent-team.js';
 import { bisectCommands, bisectReleases } from './bisect.js';
 import { loadScenario } from './config.js';
-import { formatDoctor, runDoctor } from './doctor.js';
+import { formatDoctor, runDoctorReport } from './doctor.js';
 import { formatExperiment, runExperiment } from './experiment.js';
 import { checkMcpContract, compareMcpContracts, formatMcpCheckMarkdown, formatMcpComparisonMarkdown, writeMcpSnapshot } from './mcp-contract.js';
 import { generatePluginScenarios } from './plugin-init.js';
@@ -600,12 +600,17 @@ versions.command('path')
   });
 
 program.command('doctor')
-  .description('Check local prerequisites and repository readiness')
+  .description('Check local prerequisites and extension compatibility')
   .option('-e, --executable <path>', 'Claude executable', 'claude')
-  .action(async (options: { executable: string }) => {
-    const checks = await runDoctor(process.cwd(), options.executable);
-    console.log(formatDoctor(checks));
-    if (checks.some((check) => !check.ok)) process.exitCode = 1;
+  .option('--plugin <paths...>', 'plugin directories to inspect')
+  .option('--json', 'print machine-readable compatibility preflight JSON', false)
+  .action(async (options: { executable: string; plugin?: string[]; json: boolean }) => {
+    const report = await runDoctorReport(process.cwd(), {
+      claudeExecutable: options.executable,
+      plugins: options.plugin,
+    });
+    console.log(options.json ? JSON.stringify(report, null, 2) : formatDoctor(report));
+    if (!report.ok) process.exitCode = 1;
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
