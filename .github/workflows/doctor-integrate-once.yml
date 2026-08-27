@@ -22,6 +22,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Fix provider indicator typing
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/doctor.ts')
+          text = p.read_text(encoding='utf-8')
+          old = "  const indicators = active.map(([name]) => name);"
+          new = "  const indicators: string[] = active.map(([name]) => name);"
+          if old not in text:
+              raise SystemExit('doctor indicator typing marker missing')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Apply CLI API docs integration
         run: node scripts/doctor-integrate-once.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund
@@ -32,7 +43,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/index.ts src/api.ts test/api.test.ts README.md ROADMAP.md CHANGELOG.md
+          git add src/doctor.ts src/index.ts src/api.ts test/api.test.ts README.md ROADMAP.md CHANGELOG.md
           git diff --cached --quiet && exit 0
           git commit -m "feat: expose extension compatibility doctor"
           git push origin HEAD:feat/extension-doctor
