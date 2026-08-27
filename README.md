@@ -84,7 +84,7 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -114,7 +114,7 @@ Until the npm package is published, install the CLI from source:
 ```bash
 git clone https://github.com/SLP-DEV1/claude-code-canary.git
 cd claude-code-canary
-npm install --ignore-scripts
+npm ci --ignore-scripts
 npm run build
 npm link
 
@@ -282,7 +282,7 @@ Additional v1 hardening includes:
 - bounded release downloads plus checksum/signature verification;
 - symlink refusal for plugin suites and configuration variants;
 - marker-protected destructive regeneration/repro operations;
-- exact direct dependency versions;
+- exact direct dependency versions plus a committed lockfile;
 - SHA-pinned third-party Actions;
 - CodeQL and cross-platform CI.
 
@@ -349,7 +349,7 @@ Run `claude-canary <command> --help` for command-specific flags.
 Bug reports, focused feature proposals and compatibility fixtures are welcome. Please run:
 
 ```bash
-npm install --ignore-scripts
+npm ci --ignore-scripts
 npm run check
 ```
 
