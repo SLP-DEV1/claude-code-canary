@@ -28,7 +28,7 @@ describe('Claude Code release signature verification', () => {
     await expect(readAndValidateSigningKey(generated.publicKey)).rejects.toThrow(/fingerprint mismatch/i);
   }, 20_000);
 
-  it('accepts a valid detached signature and rejects a tampered manifest', async () => {
+  it('accepts binary and armored detached signatures and rejects a tampered manifest', async () => {
     const generated = await openpgp.generateKey({
       type: 'rsa',
       rsaBits: 2048,
@@ -39,20 +39,30 @@ describe('Claude Code release signature verification', () => {
     const publicKey = await openpgp.readKey({ armoredKey: generated.publicKey });
     const manifest = new TextEncoder().encode('{"version":"2.1.89"}\n');
     const message = await openpgp.createMessage({ binary: manifest });
-    const signature = await openpgp.sign({
+
+    const binarySignature = await openpgp.sign({
       message,
       signingKeys: privateKey,
       detached: true,
       format: 'binary',
     });
-
     await expect(
-      verifyDetachedManifestSignature(manifest, signature as Uint8Array, publicKey),
+      verifyDetachedManifestSignature(manifest, binarySignature as Uint8Array, publicKey),
+    ).resolves.toBeUndefined();
+
+    const armoredSignature = await openpgp.sign({
+      message,
+      signingKeys: privateKey,
+      detached: true,
+      format: 'armored',
+    });
+    await expect(
+      verifyDetachedManifestSignature(manifest, new TextEncoder().encode(armoredSignature as string), publicKey),
     ).resolves.toBeUndefined();
 
     const tampered = new TextEncoder().encode('{"version":"2.1.90"}\n');
     await expect(
-      verifyDetachedManifestSignature(tampered, signature as Uint8Array, publicKey),
+      verifyDetachedManifestSignature(tampered, binarySignature as Uint8Array, publicKey),
     ).rejects.toThrow(/verification failed/i);
   }, 20_000);
 });
