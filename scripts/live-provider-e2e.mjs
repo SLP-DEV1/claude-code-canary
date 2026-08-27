@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +25,7 @@ const fixtureRoot = path.resolve(process.env.CLAUDE_CANARY_E2E_DIR ?? path.join(
 const port = Number(process.env.CLAUDE_CANARY_PROVIDER_PORT ?? '3456');
 const selectedPath = path.join(providerRoot, 'selected.json');
 const pidPath = path.join(providerRoot, 'router.pid');
-const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'qwen/qwen3.6-27b';
+const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const openRouterModel = process.env.CLAUDE_CANARY_OPENROUTER_MODEL ?? 'openrouter/free';
 
 if (!routerCli && action !== 'stop') {
@@ -136,6 +136,37 @@ function stopChild(child) {
   try { child.kill('SIGTERM'); } catch { /* best effort */ }
 }
 
+function runCaptured(command, args, { cwd, env }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk) => {
+      const text = chunk.toString();
+      stdout += text;
+      process.stdout.write(text);
+    });
+    child.stderr?.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      process.stderr.write(text);
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      resolve({
+        status: code ?? (signal ? 1 : 0),
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
 function isGroqRateLimit(text) {
   return [
     /\b429\b/i,
@@ -159,7 +190,7 @@ async function runSuite(providerName) {
   console.log(`\n=== Live provider: ${providerName} / ${providers[providerName].model} ===`);
   const router = await startRouter(providerName);
   try {
-    const result = spawnSync(process.execPath, [liveDriver, mode], {
+    const result = await runCaptured(process.execPath, [liveDriver, mode], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -169,12 +200,10 @@ async function runSuite(providerName) {
         CLAUDE_CANARY_E2E_DIR: fixtureRoot,
         CLAUDE_CANARY_E2E_KEEP: '1',
       },
-      encoding: 'utf8',
-      windowsHide: true,
     });
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-    if (result.error) throw result.error;
+    // Let the router's pipe handlers flush any final provider error before
+    // deciding whether a failed Groq run is eligible for the fallback.
+    await new Promise((resolve) => setTimeout(resolve, 100));
     return {
       ok: result.status === 0,
       status: result.status,
