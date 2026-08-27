@@ -50,9 +50,20 @@ async function currentFileHash(file: string): Promise<string | null> {
   }
 }
 
+function needsLifecycleEvents(scenario: Scenario): boolean {
+  return Boolean(
+    scenario.claude.include_hook_events
+    || scenario.expect?.permissions
+    || scenario.expect?.hooks
+    || scenario.regressions?.max_permission_prompts_increase !== undefined
+    || scenario.regressions?.max_permission_denied_increase !== undefined
+    || scenario.regressions?.require_same_hook_sequence,
+  );
+}
+
 export function buildClaudeArgs(scenario: Scenario, extraClaudeArgs: string[] = []): string[] {
   const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--verbose', '--no-session-persistence'];
-  if (scenario.claude.include_hook_events) args.push('--include-hook-events');
+  if (needsLifecycleEvents(scenario)) args.push('--include-hook-events');
   if (scenario.claude.model) args.push('--model', scenario.claude.model);
   if (scenario.claude.permission_mode) args.push('--permission-mode', scenario.claude.permission_mode);
   if (scenario.claude.max_turns !== undefined) args.push('--max-turns', String(scenario.claude.max_turns));
