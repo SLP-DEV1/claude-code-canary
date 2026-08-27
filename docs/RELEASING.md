@@ -12,7 +12,7 @@ The release commit must have:
 - package dry-run green;
 - CI green on Node 20, 22 and 24 on Linux plus Node 22 on Windows and macOS;
 - CodeQL green;
-- the latest manual `full` Live Claude E2E green for compatibility-sensitive releases;
+- a successful manual `Live Claude E2E (full)` run on the **exact release commit**;
 - a reviewed `CHANGELOG.md` entry;
 - no temporary release-generation workflows or debug files;
 - the root `action.yml` valid and tested;
@@ -53,7 +53,7 @@ For the changelog, move the intended entries out of `[Unreleased]` into a dated 
 ## [1.0.1] - 2026-08-28
 ```
 
-Do not tag until the version commit has passed normal CI, CodeQL and the release-required live E2E gate.
+Do not tag until the version commit has passed normal CI, CodeQL and the release-required full live E2E gate.
 
 ## 3. GitHub release tags
 
@@ -74,7 +74,7 @@ uses: SLP-DEV1/claude-code-canary@v1       # latest compatible v1
 uses: SLP-DEV1/claude-code-canary@v1.0.1   # exact release
 ```
 
-`.github/workflows/release.yml` moves `v1` only after the npm publish step succeeds, so a failed package release cannot advance the compatibility channel.
+`.github/workflows/release.yml` moves `v1` only after all release gates pass, the npm package is verified in the registry, and the GitHub Release exists. A failed or partial package release therefore cannot advance the compatibility channel.
 
 ## 4. npm publication
 
@@ -101,6 +101,8 @@ The same release workflow exposes that secret only to `npm publish` as an option
 
 Never commit an npm token or expose it to pull-request workflows.
 
+The workflow is intentionally rerun-safe around npm publication. Before publishing it checks whether the exact package version already exists. If a previous attempt published npm successfully but failed later, a manual retry with the same immutable tag skips the duplicate publish, verifies the registry copy, and continues with the GitHub Release and moving major tag.
+
 ## 5. Release sequence
 
 For a patch such as v1.0.1:
@@ -115,13 +117,27 @@ Then:
 1. finalize the `CHANGELOG.md` heading/date;
 2. commit and push the release preparation to `main`;
 3. wait for CI and CodeQL to pass;
-4. run the manual **Live Claude E2E** workflow in `full` mode and require it to pass;
-5. create and push the exact tag `v1.0.1` on that tested commit;
-6. `.github/workflows/release.yml` verifies the tag/package version, runs the complete check suite, dry-runs the tarball, publishes npm, then moves `v1` to the same commit;
-7. create the GitHub Release from the exact tag and use the reviewed changelog as release notes;
-8. perform the Marketplace UI step if the Action is being published/listed there.
+4. run the manual **Live Claude E2E** workflow in `full` mode on that exact commit and require it to pass;
+5. create and push the exact immutable tag `v1.0.1` on that tested commit;
+6. `.github/workflows/release.yml` checks out that exact tag, verifies tag/package version consistency, reruns the complete check suite and tarball dry-run, and confirms the same commit has a successful `Live Claude E2E (full)` run;
+7. the workflow publishes npm if the exact version is not already present and then verifies that version from the public npm registry;
+8. the workflow creates the GitHub Release automatically with generated release notes if it does not already exist;
+9. only after all of the above succeeds does the workflow move the floating `v1` Action tag to the release commit;
+10. perform the Marketplace UI step if the Action is being published/listed there.
 
-If a tag-triggered npm publication needs to be retried, use the workflow's manual `tag` input with the same immutable exact tag. Do not move or recreate the exact tag.
+If a tag-triggered publication needs to be retried, use the workflow's manual `tag` input with the same immutable exact tag. Do not move or recreate the exact tag.
+
+### Release evidence semantics
+
+The full live gate is deliberately strict. A release is accepted only when GitHub Actions contains a successful run named:
+
+```text
+Live Claude E2E (full)
+```
+
+and that run's `head_sha` equals the exact commit checked out from the release tag.
+
+Scheduled `core` runs do not count. Manual `core` runs do not count. A full run from another commit does not count. Manual runs without provider credentials fail rather than being recorded as a successful skipped run.
 
 ## 6. GitHub Marketplace
 
@@ -134,17 +150,16 @@ The repository is structured for GitHub Marketplace publication:
 - documented inputs and outputs;
 - tagged release workflow.
 
-The final Marketplace publication is an account/UI operation:
+The normal release workflow creates the GitHub Release automatically. Marketplace publication remains an account/UI operation after that release exists:
 
 1. Open **Releases** in the repository.
-2. Choose **Draft a new release**.
-3. Select the already-tested exact release tag, for example `v1.0.1`.
-4. Enable **Publish this Action to the GitHub Marketplace**.
-5. Resolve any Marketplace validation warning GitHub displays.
-6. Choose appropriate categories such as **Continuous integration** and **Code quality** when offered.
-7. Accept the GitHub Marketplace Developer Agreement if the account has not already done so.
-8. Complete the account's required two-factor authentication step.
-9. Publish the release.
+2. Open the just-created exact release, for example `v1.0.1`, and choose **Edit**.
+3. Enable **Publish this Action to the GitHub Marketplace** if GitHub offers the option for the release.
+4. Resolve any Marketplace validation warning GitHub displays.
+5. Choose appropriate categories such as **Continuous integration** and **Code quality** when offered.
+6. Accept the GitHub Marketplace Developer Agreement if the account has not already done so.
+7. Complete the account's required two-factor authentication step.
+8. Save/publish the Marketplace listing changes.
 
 Do not claim Marketplace availability in the README until GitHub confirms the listing is published.
 
@@ -181,6 +196,8 @@ The exact release tag and the `v1` Action alias are separate from npm distributi
 ## Upgrade
 No migration is required from vX.Y.Z-1.
 ```
+
+GitHub's generated notes provide a useful commit/PR baseline. The reviewed changelog remains the authoritative human-maintained summary of notable behavior changes.
 
 ## 9. Post-release checks
 
