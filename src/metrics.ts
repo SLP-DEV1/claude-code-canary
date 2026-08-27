@@ -8,6 +8,49 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+export function extractStreamErrors(stdout: string): string[] {
+  const errors = new Set<string>();
+
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isRecord(event)) continue;
+
+    if (Array.isArray(event.errors)) {
+      for (const error of event.errors) {
+        if (typeof error === 'string' && error.trim()) errors.add(error.trim());
+      }
+    }
+
+    if (typeof event.error === 'string' && event.error.trim()) {
+      errors.add(event.error.trim());
+    }
+
+    if (event.is_error === true && typeof event.result === 'string' && event.result.trim()) {
+      errors.add(event.result.trim());
+    }
+
+    if (
+      event.type === 'result'
+      && event.is_error === true
+      && errors.size === 0
+      && typeof event.subtype === 'string'
+      && event.subtype.startsWith('error')
+    ) {
+      errors.add(`Claude result subtype: ${event.subtype}`);
+    }
+  }
+
+  return [...errors];
+}
+
 export function parseStreamMetrics(stdout: string): RunMetrics {
   const toolIds = new Set<string>();
   const hookEvents = new Set<string>();
