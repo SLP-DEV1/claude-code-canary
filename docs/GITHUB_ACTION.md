@@ -1,6 +1,6 @@
 # Claude Canary GitHub Action
 
-Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, MCP contract checks, committed-baseline checks and plugin compatibility suites.
+Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, MCP contract checks, committed-baseline checks, plugin compatibility suites, first-class scenario suites and release watching.
 
 Supported modes:
 
@@ -11,8 +11,10 @@ Supported modes:
 - `mcp-check`
 - `plugin-matrix`
 - `plugin-suite`
+- `suite`
+- `watch`
 
-The Action streams Canary output into the job log, writes a GitHub Step Summary and uploads `.canary/results/` by default. Modes that produce Markdown reports (`pr-check`, `baseline-check`, `plugin-matrix`, `plugin-suite`) place that report directly in the Step Summary.
+The Action streams Canary output into the job log, writes a GitHub Step Summary and uploads `.canary/results/` by default. Modes that produce combined reports (`pr-check`, `baseline-check`, `plugin-matrix`, `plugin-suite`, `suite`, `watch`) place that report directly in the Step Summary.
 
 ## Pull-request regression gate
 
@@ -36,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: SLP-DEV1/claude-code-canary@v1
+      - uses: SLP-DEV1/claude-code-canary@v2
         with:
           mode: pr-check
           scenario: .canary/basic.canary.yml
@@ -62,7 +64,7 @@ claude-canary baseline update .canary/basic.canary.yml
 Commit the generated `.canary/baselines/<scenario-name>.json`, then use:
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   with:
     mode: baseline-check
     scenario: .canary/basic.canary.yml
@@ -77,7 +79,7 @@ See [Committed baselines](BASELINES.md).
 MCP contract checks do not require Claude or a model credential. They initialize the configured stdio MCP server directly and compare its exposed protocol surface with explicit expectations and, by default, a committed known-good snapshot.
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   with:
     mode: mcp-check
     mcp-contract: .canary/mcp/github.mcp.yml
@@ -112,19 +114,55 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: SLP-DEV1/claude-code-canary@v1
+      - uses: SLP-DEV1/claude-code-canary@v2
         with:
           mode: plugin-suite
           plugin: ./my-plugin
           last: 10
 ```
 
-For the current exact immutable v1 patch release use `@v1.1.0` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
+For the immutable v2 launch release use `@v2.0.0` instead of the moving `@v2` compatibility tag. The v1 major channel remains on the v1.x line.
+
+## Run a first-class scenario suite
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v2
+  with:
+    mode: suite
+    suite: .canary/release.suite.yml
+    tag: release
+    concurrency: 2
+    max-runs: 100
+```
+
+Suites provide deterministic selection, bounded concurrency, sharding, run budgets, failure fingerprints, explainable selection and combined result artifacts. `reuse-results: true` reuses only compatibility-identical cached evidence.
+
+For deterministic CI sharding:
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v2
+  with:
+    mode: suite
+    suite: .canary/release.suite.yml
+    shard: 2/4
+```
+
+## Watch new Claude Code releases
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v2
+  with:
+    mode: watch
+    suite: .canary/release.suite.yml
+    watch-good: 2.1.230
+```
+
+Run this mode from a trusted scheduled workflow. Canary stores small non-secret watch state, tests newly observed releases and can identify the first bad release when a regression appears. Use `check-only: true` to report unseen releases without launching Claude or mutating watch state.
 
 ## Compare two Claude Code releases
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   with:
     mode: compare
     scenario: .canary/basic.canary.yml
@@ -137,7 +175,7 @@ For the current exact immutable v1 patch release use `@v1.1.0` instead of the mo
 ## Run one scenario
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   with:
     mode: run
     scenario: .canary/basic.canary.yml
@@ -146,7 +184,7 @@ For the current exact immutable v1 patch release use `@v1.1.0` instead of the mo
 ## Run one plugin scenario across releases
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   with:
     mode: plugin-matrix
     scenario: .canary/plugins/my-plugin/command-review.canary.yml
@@ -161,7 +199,7 @@ You can use `versions` or `last` instead of `from`/`to`.
 
 | Input | Default | Used by | Description |
 | --- | --- | --- | --- |
-| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix`, or `plugin-suite` |
+| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix`, `plugin-suite`, `suite`, or `watch` |
 | `scenario` | mode-specific | compare/run/pr-check/baseline-check/matrix | Scenario path |
 | `from` | — | compare/plugin modes | Baseline release for compare, or oldest exact release in plugin range mode |
 | `to` | compare: `latest` | compare/plugin modes | Candidate release for compare, or newest exact release in plugin range mode |
@@ -172,12 +210,19 @@ You can use `versions` or `last` instead of `from`/`to`.
 | `mcp-require-baseline` | `true` | mcp-check | Fail when no reviewed MCP baseline exists |
 | `comment-pr` | `false` | pr-check | Best-effort stable PR report comment; requires `pull-requests: write` |
 | `plugin` | — | plugin modes | Plugin directory |
-| `suite` | auto | plugin-suite | Generated Canary plugin-suite directory |
+| `suite` | mode-specific | plugin-suite/suite/watch | Generated plugin-suite directory or first-class scenario-suite YAML |
 | `versions` | — | plugin modes | Space/comma-separated exact `x.y.z` releases |
 | `last` | `10` | plugin modes | Newest published releases to test |
-| `platform` | host | plugin modes | Supported Claude Code platform id override |
-| `max-runs` | `200` | plugin-suite | Safety budget for `scenarios × releases` |
+| `platform` | host | plugin/watch | Supported Claude Code platform id override |
+| `max-runs` | `200` | plugin-suite/suite/watch | Safety budget for scenario/release execution |
 | `fail-on-incompatible` | `true` | plugin modes | Set `false` for report-only historical matrices |
+| `tag` | — | suite/watch | Select only scenarios with this tag |
+| `shard` | — | suite/watch | Deterministic `N/M` suite shard |
+| `concurrency` | suite default | suite/watch | Maximum concurrent scenario runs |
+| `reuse-results` | `false` | suite/watch | Reuse only compatibility-identical cached scenario results |
+| `watch-state` | `.canary/watch-state.json` | watch | Non-secret release watcher state file |
+| `watch-good` | — | watch | Initial exact known-good Claude Code release when bootstrapping |
+| `check-only` | `false` | watch | Report unseen releases without launching Claude or mutating state |
 | `node-version` | `22` | all | Node used to build/run Canary |
 | `upload-results` | `true` | all | Upload `.canary/results/` after the run |
 | `artifact-name` | generated | all | Optional artifact name override |
@@ -197,7 +242,7 @@ Version selectors for plugin modes are mutually exclusive in practice: use one o
 
 ## Step Summary and artifacts
 
-`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create report artifacts. `mcp-check` writes its bounded Markdown contract report directly into the Step Summary through the Action runner. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
+`pr-check`, `baseline-check`, `plugin-matrix`, `plugin-suite`, `suite` and `watch` create report artifacts. `mcp-check` writes its bounded Markdown contract report directly into the Step Summary through the Action runner. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
 
 For modes without a combined Markdown report, the Action adds a bounded excerpt of the live CLI output to the summary. Full progress remains in the job log.
 
@@ -208,7 +253,7 @@ Artifact upload uses a run-specific name by default so parallel/retried jobs do 
 The Action runner is `scripts/action-runner.mjs`. It validates Action inputs, builds an argument array and launches:
 
 ```text
-node <action>/dist/index.js <args...>
+node <action>/dist/v2-cli.js <args...>
 ```
 
 with `shell: false`.
@@ -240,7 +285,7 @@ A normal fork `pull_request` may receive a read-only `GITHUB_TOKEN`; `comment-pr
 
 Canary protects the checked-out Git source through disposable worktrees. Commands still execute as the GitHub runner user and can access resources available to that runner.
 
-See [`SECURITY_MODEL.md`](SECURITY_MODEL.md) for the complete v1 trust model.
+See [`SECURITY_MODEL.md`](SECURITY_MODEL.md) for the complete trust model.
 
 ## Cost controls
 
@@ -250,9 +295,10 @@ Claude runs can consume API usage. Keep deterministic scenarios small and use:
 - `claude.max_turns`;
 - `claude.max_budget_usd` where supported;
 - scenario `limits`;
-- plugin-suite `max-runs`.
+- `max-runs` for suite/plugin matrices;
+- `check-only` for watch discovery when live execution is not wanted.
 
-When a scenario configures `max_cost_usd` but Claude does not report cost, v1 fails closed rather than silently ignoring the limit.
+When a scenario configures `max_cost_usd` but Claude does not report cost, Canary fails closed rather than silently ignoring the limit.
 
 ## Badge
 
@@ -264,6 +310,6 @@ For a workflow named `.github/workflows/claude-canary.yml`:
 
 ## Marketplace release
 
-The root `action.yml` contains Marketplace metadata, branding, inputs and outputs. Publishing the listing is performed from a tagged GitHub Release by enabling **Publish this Action to the GitHub Marketplace**.
+The root `action.yml` contains Marketplace metadata, branding, inputs and outputs. Publishing the listing is performed from a tagged GitHub Release by enabling **Publish this Action to the GitHub Marketplace** when GitHub requires release-specific confirmation.
 
-See [`RELEASING.md`](RELEASING.md) for the exact v1 release/Marketplace checklist.
+See [`RELEASING.md`](RELEASING.md) for the major-aware release/Marketplace contract.

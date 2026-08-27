@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 
-const MODES = new Set(['compare', 'run', 'pr-check', 'baseline-check', 'mcp-check', 'plugin-matrix', 'plugin-suite']);
+const MODES = new Set(['compare', 'run', 'pr-check', 'baseline-check', 'mcp-check', 'plugin-matrix', 'plugin-suite', 'suite', 'watch']);
 const SUMMARY_LIMIT = 60_000;
 
 function env(name, fallback = '') {
@@ -43,6 +43,16 @@ function selectorArgs(config) {
     return ['--from', config.from, '--to', config.to];
   }
   return ['--last', String(config.last ?? 10)];
+}
+
+function suiteSelectionArgs(config) {
+  const args = [];
+  if (config.tag) args.push('--tag', config.tag);
+  if (config.shard) args.push('--shard', config.shard);
+  if (config.concurrency !== undefined) args.push('--concurrency', String(config.concurrency));
+  if (config.maxRuns !== undefined) args.push('--max-runs', String(config.maxRuns));
+  if (config.reuseResults) args.push('--reuse-results');
+  return args;
 }
 
 export function buildCliArgs(config) {
@@ -85,6 +95,16 @@ export function buildCliArgs(config) {
       if (config.platform) args.push('--platform', config.platform);
       if (config.maxRuns !== undefined) args.push('--max-runs', String(config.maxRuns));
       if (!config.failOnIncompatible) args.push('--allow-incompatible');
+      return args;
+    }
+    case 'suite':
+      return ['suite', config.suite || '.canary/release.suite.yml', ...suiteSelectionArgs(config)];
+    case 'watch': {
+      const args = ['watch', '--suite', config.suite || '.canary/release.suite.yml', ...suiteSelectionArgs(config)];
+      if (config.watchState) args.push('--state', config.watchState);
+      if (config.watchGood) args.push('--good', config.watchGood);
+      if (config.platform) args.push('--platform', config.platform);
+      if (config.checkOnly) args.push('--check-only');
       return args;
     }
     default:
@@ -184,6 +204,13 @@ export function readConfig() {
     platform: env('CANARY_PLATFORM'),
     maxRuns: parsePositiveInteger(env('CANARY_MAX_RUNS'), 'max-runs'),
     failOnIncompatible: parseBoolean(env('CANARY_FAIL_ON_INCOMPATIBLE', 'true'), 'fail-on-incompatible'),
+    tag: env('CANARY_TAG'),
+    shard: env('CANARY_SHARD'),
+    concurrency: parsePositiveInteger(env('CANARY_CONCURRENCY'), 'concurrency'),
+    reuseResults: parseBoolean(env('CANARY_REUSE_RESULTS', 'false'), 'reuse-results'),
+    watchState: env('CANARY_WATCH_STATE'),
+    watchGood: env('CANARY_WATCH_GOOD'),
+    checkOnly: parseBoolean(env('CANARY_CHECK_ONLY', 'false'), 'check-only'),
   };
 }
 
@@ -209,7 +236,7 @@ async function main() {
   const before = await snapshotResults(resultsDir);
   const args = buildCliArgs(config);
   const command = displayCommand(args);
-  const result = await runCommand(process.execPath, [path.join(actionPath, 'dist', 'index.js'), ...args], workspace);
+  const result = await runCommand(process.execPath, [path.join(actionPath, 'dist', 'v2-cli.js'), ...args], workspace);
   const reportPath = await findNewestNewReport(resultsDir, before);
   const passed = result.code === 0;
   const artifactName = `claude-canary-${config.mode}-${env('GITHUB_RUN_ID', 'local')}-${env('GITHUB_RUN_ATTEMPT', '1')}`;

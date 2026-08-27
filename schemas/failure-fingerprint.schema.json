@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/failure-fingerprint.schema.json",
+  "title": "Claude Code Canary Failure Fingerprint v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version","id","category","failures","changedFiles","hookSequence","promptedTools"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "category": { "enum": ["passed","timeout","claude-exit","assertion"] },
+    "failures": { "type": "array", "items": { "type": "string" } },
+    "changedFiles": { "type": "array", "items": { "type": "string" } },
+    "hookSequence": { "type": "array", "items": { "type": "string" } },
+    "promptedTools": { "type": "array", "items": { "type": "string" } }
+  }
+}

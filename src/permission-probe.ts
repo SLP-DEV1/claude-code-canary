@@ -26,7 +26,9 @@ function needsPromptProbe(scenario: Scenario): boolean {
   return Boolean(
     scenario.expect?.permissions?.max_prompts !== undefined
     || (scenario.expect?.permissions?.deny_prompted_tools?.length ?? 0) > 0
-    || scenario.regressions?.max_permission_prompts_increase !== undefined,
+    || scenario.regressions?.max_permission_prompts_increase !== undefined
+    || (scenario.policy?.never_auto_allow?.length ?? 0) > 0
+    || (scenario.policy?.require_prompt?.length ?? 0) > 0,
   );
 }
 
@@ -54,9 +56,12 @@ function send(payload) {
   process.stdout.write(JSON.stringify(payload) + '\n');
 }
 
-function trace(toolName) {
+function trace(toolName, toolUseId) {
   if (!traceFile) return;
-  fs.appendFileSync(traceFile, JSON.stringify({ toolName: typeof toolName === 'string' ? toolName : undefined }) + '\n', 'utf8');
+  fs.appendFileSync(traceFile, JSON.stringify({
+    toolName: typeof toolName === 'string' ? toolName : undefined,
+    toolUseId: typeof toolUseId === 'string' ? toolUseId : undefined,
+  }) + '\n', 'utf8');
 }
 
 function handle(message) {
@@ -94,12 +99,15 @@ function handle(message) {
       : typeof args.toolName === 'string' ? args.toolName
       : typeof args.tool === 'string' ? args.tool
       : undefined;
+    const toolUseId = typeof args.tool_use_id === 'string' ? args.tool_use_id
+      : typeof args.toolUseId === 'string' ? args.toolUseId
+      : undefined;
     const toolInput = isObject(args.tool_input) ? args.tool_input
       : isObject(args.toolInput) ? args.toolInput
       : isObject(args.input) ? args.input
       : undefined;
 
-    trace(toolName);
+    trace(toolName, toolUseId);
 
     const decision = toolInput
       ? { behavior: 'allow', updatedInput: toolInput }
@@ -226,7 +234,7 @@ export async function preparePermissionProbe(scenario: Scenario): Promise<Prepar
       return {
         permissionPrompts: promptRows.length,
         permissionDenied: deniedRows.length,
-        permissionRequests: promptRows.map((row) => ({ toolName: traceValue(row, 'toolName') })),
+        permissionRequests: promptRows.map((row) => ({ toolName: traceValue(row, 'toolName'), toolUseId: traceValue(row, 'toolUseId') })),
       };
     },
     cleanup: async () => { await rm(runtimeDir, { recursive: true, force: true }); },

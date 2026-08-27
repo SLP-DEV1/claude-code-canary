@@ -35,6 +35,20 @@ Claude Code changes. Your `CLAUDE.md`, hooks, plugins, MCP servers and permissio
 
 Canary runs the same scenario from the same Git commit in disposable worktrees, captures tool/token/reported-cost/duration metrics, checks deterministic assertions, compares releases, bisects regressions and builds full plugin compatibility matrices.
 
+## What v2 adds
+
+Canary v2 turns those individual checks into a compatibility platform:
+
+- first-class scenario suites with tags, affected-path selection, concurrency, deterministic sharding and run budgets;
+- scheduled release watch with known-good state, regression detection and automatic first-bad-release bisection;
+- deterministic failure fingerprints and flakiness analysis so noisy scenarios are not confused with upstream regressions;
+- portable HTML, JUnit and SARIF reporting plus local historical trends;
+- compatibility manifests, `canary.lock`, open registry aggregation, evidence-backed badges and inspectable scenario packs;
+- permission-policy/trust regression coverage, isolated MCP fixtures, gateway matrices and signed/checksummed attestations;
+- versioned public schemas plus compatibility query/explain/graph APIs for build tools and multi-project workspaces.
+
+All existing v1 workflows remain available through the v2 CLI.
+
 ## Start in 30 seconds
 
 Install the published CLI and verify the host before spending tokens:
@@ -46,10 +60,10 @@ claude-canary init
 claude-canary run .canary/basic.canary.yml
 ```
 
-Already using GitHub Actions? Add Canary as a CI step and keep the stable `@v1` tag:
+Already using GitHub Actions? Add Canary as a CI step and use the stable `@v2` major channel:
 
 ```yaml
-- uses: SLP-DEV1/claude-code-canary@v1
+- uses: SLP-DEV1/claude-code-canary@v2
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   with:
@@ -69,6 +83,11 @@ That gives you the same scenario locally and in CI, with machine-readable result
 | Keep recurring CI to one Claude run | `baseline-check` |
 | Test an entire Claude Code plugin surface | `plugin-suite` |
 | Detect MCP schema/capability drift | `mcp-check` |
+| Run a deterministic scenario suite | `suite` |
+| Guard against newly published Claude Code releases | `watch` |
+| Measure scenario stability/noise | `flake` |
+| Publish/query portable compatibility evidence | `compat` / `lock` |
+| Generate interoperable local/CI reports | `report` / `trend` |
 | Check host/plugin/MCP readiness without exposing secrets | `doctor` |
 
 ## The 30-second demo
@@ -119,7 +138,7 @@ Canary is not another transcript viewer or generic model leaderboard. It is a **
 
 ## GitHub Action
 
-The v1 Action supports `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`. `pr-check` can also update one stable pull-request comment with the regression table when `comment-pr: true` is enabled.
+The v2 Action supports `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix`, `plugin-suite`, `suite` and `watch` through one Marketplace-ready `action.yml`. `pr-check` can also update one stable pull-request comment with the regression table when `comment-pr: true` is enabled.
 
 A plugin compatibility gate can be as small as:
 
@@ -144,7 +163,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: SLP-DEV1/claude-code-canary@v1
+      - uses: SLP-DEV1/claude-code-canary@v2
         with:
           mode: plugin-suite
           plugin: ./my-plugin

@@ -1,0 +1,92 @@
+name: Release candidate after full E2E
+
+on:
+  workflow_run:
+    workflows:
+      - Live Claude E2E
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: release-candidate-after-e2e
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.display_title == 'Live Claude E2E (full)' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact E2E commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Validate release candidate
+        id: candidate
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const candidate = JSON.parse(readFileSync('.github/release-candidate.json', 'utf8'));
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (candidate.publish !== true) throw new Error('Release candidate is not marked publish=true.');
+          if (candidate.version !== pkg.version) {
+            throw new Error(`Release candidate ${candidate.version} does not match package ${pkg.version}.`);
+          }
+          if (!/^\d+\.\d+\.\d+$/.test(candidate.version)) throw new Error('Release candidate must be an exact stable SemVer.');
+          const expectedChannel = `v${candidate.version.split('.')[0]}`;
+          if (candidate.channel !== expectedChannel) {
+            throw new Error(`Release channel ${candidate.channel} does not match ${expectedChannel}.`);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=v${candidate.version}\n`);
+          console.log(`Validated release candidate v${candidate.version} at ${process.env.GITHUB_SHA}.`);
+          NODE
+
+      - name: Create immutable release tag if needed
+        env:
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk '{print $1}')"
+          if [[ -n "$remote_sha" ]]; then
+            if [[ "$remote_sha" != "$RELEASE_SHA" ]]; then
+              echo "Tag $RELEASE_TAG already exists at $remote_sha, expected $RELEASE_SHA." >&2
+              exit 1
+            fi
+            echo "$RELEASE_TAG already points to the verified E2E commit."
+            exit 0
+          fi
+          git tag "$RELEASE_TAG" "$RELEASE_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+
+      - name: Dispatch hardened publish workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+        shell: bash
+        run: |
+          gh workflow run release.yml --ref main -f tag="$RELEASE_TAG"
+
+      - name: Write orchestration summary
+        env:
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          {
+            echo "### Release candidate promoted"
+            echo
+            echo "- Full E2E commit: \`$RELEASE_SHA\`"
+            echo "- Immutable tag: \`$RELEASE_TAG\`"
+            echo "- Publish workflow: dispatched"
+          } >> "$GITHUB_STEP_SUMMARY"

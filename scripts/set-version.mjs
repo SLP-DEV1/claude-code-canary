@@ -20,6 +20,10 @@ if (!lock.packages || !lock.packages['']) {
   throw new Error('package-lock.json does not contain packages[""] metadata.');
 }
 lock.packages[''].version = version;
+// Keep package metadata that affects installed command resolution synchronized too.
+// This prevents a release-version bump from leaving package-lock.json pointing at
+// an obsolete CLI entry after package.json changes its public bin path.
+lock.packages[''].bin = { ...pkg.bin };
 
 await writeFile(packageUrl, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
 await writeFile(lockUrl, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');

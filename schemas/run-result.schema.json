@@ -4,22 +4,7 @@
   "title": "Claude Code Canary Run Result v1",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schemaVersion",
-    "scenario",
-    "executable",
-    "passed",
-    "failures",
-    "claudeExitCode",
-    "claudeTimedOut",
-    "durationMs",
-    "changedFiles",
-    "setup",
-    "verification",
-    "metrics",
-    "createdAt",
-    "gitCommit"
-  ],
+  "required": ["schemaVersion","scenario","executable","passed","failures","claudeExitCode","claudeTimedOut","durationMs","changedFiles","setup","verification","metrics","createdAt","gitCommit"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "scenario": { "type": "string", "minLength": 1 },
@@ -55,18 +40,10 @@
     "metrics": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "toolCalls",
-        "inputTokens",
-        "outputTokens",
-        "cacheReadTokens",
-        "cacheCreationTokens",
-        "totalTokens",
-        "hookEvents",
-        "parseErrors"
-      ],
+      "required": ["toolCalls","inputTokens","outputTokens","cacheReadTokens","cacheCreationTokens","totalTokens","hookEvents","parseErrors"],
       "properties": {
         "toolCalls": { "type": "integer", "minimum": 0 },
+        "toolNames": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         "inputTokens": { "type": "integer", "minimum": 0 },
         "outputTokens": { "type": "integer", "minimum": 0 },
         "cacheReadTokens": { "type": "integer", "minimum": 0 },
@@ -88,6 +65,18 @@
               "toolUseId": { "type": "string", "minLength": 1 },
               "permissionMode": { "type": "string", "minLength": 1 }
             }
+          }
+        },
+        "policyCoverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["usedTools","promptedTools","autoAllowedTools","deniedCount","neverExercised"],
+          "properties": {
+            "usedTools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "promptedTools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "autoAllowedTools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "deniedCount": { "type": "integer", "minimum": 0 },
+            "neverExercised": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
           }
         },
         "parseErrors": { "type": "integer", "minimum": 0 }

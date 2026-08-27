@@ -8,7 +8,7 @@ branding:
 
 inputs:
   mode:
-    description: "Canary workflow: compare, run, pr-check, baseline-check, mcp-check, plugin-matrix, or plugin-suite."
+    description: "Canary workflow: compare, run, pr-check, baseline-check, mcp-check, plugin-matrix, plugin-suite, suite, or watch."
     required: false
     default: compare
   scenario:
@@ -52,7 +52,7 @@ inputs:
     required: false
     default: ""
   suite:
-    description: Generated plugin suite directory. Defaults to .canary/plugins/<plugin-name>.
+    description: Scenario suite for suite/watch, or generated plugin suite directory for plugin-suite.
     required: false
     default: ""
   versions:
@@ -68,13 +68,41 @@ inputs:
     required: false
     default: ""
   max-runs:
-    description: Maximum scenario x release runs for plugin-suite.
+    description: Maximum run budget for suite or plugin-suite.
     required: false
     default: "200"
   fail-on-incompatible:
     description: Fail the Action when a plugin release/scenario is incompatible.
     required: false
     default: "true"
+  tag:
+    description: Optional scenario tag selector for suite/watch.
+    required: false
+    default: ""
+  shard:
+    description: Deterministic suite shard in N/M form, for example 2/4.
+    required: false
+    default: ""
+  concurrency:
+    description: Maximum concurrent scenarios for suite/watch.
+    required: false
+    default: ""
+  reuse-results:
+    description: Reuse only compatibility-identical cached scenario results in suite/watch.
+    required: false
+    default: "false"
+  watch-state:
+    description: Release watcher state file. Defaults to .canary/watch-state.json.
+    required: false
+    default: ""
+  watch-good:
+    description: Initial exact known-good Claude Code release when bootstrapping watch mode.
+    required: false
+    default: ""
+  check-only:
+    description: In watch mode, report unseen releases without launching Claude or mutating watch state.
+    required: false
+    default: "false"
   node-version:
     description: Node.js version used to build and run Claude Canary.
     required: false
@@ -158,6 +186,13 @@ runs:
         CANARY_PLATFORM: ${{ inputs.platform }}
         CANARY_MAX_RUNS: ${{ inputs.max-runs }}
         CANARY_FAIL_ON_INCOMPATIBLE: ${{ inputs.fail-on-incompatible }}
+        CANARY_TAG: ${{ inputs.tag }}
+        CANARY_SHARD: ${{ inputs.shard }}
+        CANARY_CONCURRENCY: ${{ inputs.concurrency }}
+        CANARY_REUSE_RESULTS: ${{ inputs.reuse-results }}
+        CANARY_WATCH_STATE: ${{ inputs.watch-state }}
+        CANARY_WATCH_GOOD: ${{ inputs.watch-good }}
+        CANARY_CHECK_ONLY: ${{ inputs.check-only }}
       run: node "${GITHUB_ACTION_PATH}/scripts/action-runner.mjs"
 
     - name: Update Claude Canary pull request comment

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/watch-result.schema.json",
+  "title": "Claude Code Canary Release Watch Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","status","createdAt","latest","unseen","statePath"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["initialized","no-change","new-release","compatible","regression"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "previousObserved": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "previousKnownGood": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "latest": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "unseen": { "type": "array", "items": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" } },
+    "candidate": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "firstBadRelease": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "firstFailingScenario": { "type": "string" },
+    "suite": { "$ref": "suite-result.schema.json" },
+    "statePath": { "type": "string", "minLength": 1 },
+    "jsonArtifactPath": { "type": "string" },
+    "markdownArtifactPath": { "type": "string" }
+  }
+}

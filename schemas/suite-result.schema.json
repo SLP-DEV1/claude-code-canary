@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/suite-result.schema.json",
+  "title": "Claude Code Canary Suite Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","suite","suitePath","createdAt","passed","total","discoveredTotal","passedCount","failedCount","infrastructureFailedCount","cacheHitCount","skippedBySelection","skipped","scenarios","failureClusters"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "type": "string", "minLength": 1 },
+    "suitePath": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "passed": { "type": "boolean" },
+    "total": { "type": "integer", "minimum": 0 },
+    "discoveredTotal": { "type": "integer", "minimum": 0 },
+    "passedCount": { "type": "integer", "minimum": 0 },
+    "failedCount": { "type": "integer", "minimum": 0 },
+    "infrastructureFailedCount": { "type": "integer", "minimum": 0 },
+    "cacheHitCount": { "type": "integer", "minimum": 0 },
+    "skippedBySelection": { "type": "integer", "minimum": 0 },
+    "shard": { "type": "string", "pattern": "^[1-9][0-9]*/[1-9][0-9]*$" },
+    "tag": { "type": "string", "minLength": 1 },
+    "executable": { "type": "string", "minLength": 1 },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path","reason"],
+        "properties": { "path": { "type": "string" }, "reason": { "enum": ["tag","unaffected","shard"] } }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path","passed"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" },
+          "result": { "$ref": "run-result.schema.json" },
+          "fingerprint": { "$ref": "failure-fingerprint.schema.json" },
+          "infrastructureError": { "type": "string" },
+          "cacheHit": { "type": "boolean" },
+          "cacheKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "failureClusters": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["fingerprint","count","scenarios"],
+        "properties": {
+          "fingerprint": { "$ref": "failure-fingerprint.schema.json" },
+          "count": { "type": "integer", "minimum": 1 },
+          "scenarios": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        }
+      }
+    },
+    "jsonArtifactPath": { "type": "string" },
+    "markdownArtifactPath": { "type": "string" }
+  }
+}

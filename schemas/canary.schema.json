@@ -9,6 +9,21 @@
     "version": { "const": 1 },
     "name": { "type": "string", "minLength": 1 },
     "prompt": { "type": "string", "minLength": 1 },
+    "tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+    "affects": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+    "always_run": { "type": "boolean", "default": false },
+    "stability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_pass_rate": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.9 },
+        "max_changed_file_variants": { "type": "integer", "minimum": 1, "default": 1 },
+        "max_hook_sequence_variants": { "type": "integer", "minimum": 1 },
+        "max_permission_sequence_variants": { "type": "integer", "minimum": 1 },
+        "max_total_tokens_cv": { "type": "number", "minimum": 0 },
+        "max_tool_calls_cv": { "type": "number", "minimum": 0 }
+      }
+    },
     "setup": { "$ref": "#/$defs/commands" },
     "verify": { "$ref": "#/$defs/commands" },
     "claude": {
@@ -72,6 +87,16 @@
             "deny_unexpected": { "type": "boolean", "default": false }
           }
         }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "never_auto_allow": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+        "require_prompt": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+        "deny_use": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+        "allow_only": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] }
       }
     },
     "limits": {

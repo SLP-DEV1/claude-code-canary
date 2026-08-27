@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/compatibility-manifest.schema.json",
+  "title": "Claude Code Canary Compatibility Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","canaryVersion","claudeCode","component","platform","suiteHash","result","createdAt","evidenceHash","failureFingerprints","metadata"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "canaryVersion": { "type": "string", "minLength": 1 },
+    "claudeCode": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "component": { "type": "string", "minLength": 1 },
+    "componentVersion": { "type": "string", "minLength": 1 },
+    "platform": { "type": "string", "minLength": 1 },
+    "suiteHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "result": { "enum": ["pass","fail","unsupported"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "evidenceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "failureFingerprints": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{16}$" }, "uniqueItems": true },
+    "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
+  }
+}

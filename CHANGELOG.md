@@ -4,6 +4,32 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-28
+
+### Added
+
+- Add first-class deterministic scenario suites with tags, affected-path selection, bounded concurrency, deterministic sharding, fail-fast behavior, run budgets, explainable skips and compatibility-safe result reuse.
+- Add release watch state that detects newly published Claude Code versions, executes suites and automatically bisects unseen release ranges when the newest release regresses.
+- Add deterministic failure fingerprints/clustering and scenario/suite flakiness analysis with stability policies.
+- Add portable static HTML, JUnit XML and SARIF reports, local trend aggregation and explicit baseline proposals that never silently overwrite reviewed baselines.
+- Add privacy-minimized compatibility manifests, `canary.lock`, open registry aggregation, evidence-backed badges and inspectable scenario packs.
+- Add permission-policy coverage, hook/monitor trust regression checks, isolated MCP fixture packs, gateway/provider matrices and SHA-256/optional Ed25519 evidence attestations.
+- Add versioned public schemas for suite/watch/fingerprint/manifest/lock/registry/attestation results and a compatibility query/explain/graph API for multi-project aggregation.
+- Add `suite` and `watch` GitHub Action modes and the v2 CLI entry point while retaining existing v1-era commands.
+
+### Changed
+
+- Promote the package and public CLI contract to v2.0.0.
+- Keep Action major channels independent: v1 remains on the v1.x line while v2 releases move only `v2`.
+- Synchronize package-lock CLI bin metadata as part of release-version preparation.
+- Extend scenario/run metrics additively with selection metadata, stability/policy configuration and privacy-safe tool-name coverage.
+
+### Release integrity
+
+- A v2 release candidate on `main` triggers a full Live Claude E2E run on the exact candidate commit.
+- Only a successful `Live Claude E2E (full)` run can promote the candidate to its immutable tag and dispatch the hardened npm/GitHub release workflow.
+- npm publication continues to use Trusted Publishing/OIDC provenance and exact tag/package-version validation.
+
 ## [1.2.0] - 2026-08-27
 
 ### Added
