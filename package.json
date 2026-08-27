@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "Deterministic regression testing, release bisection and plugin compatibility matrices for Claude Code",
   "type": "module",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    }
+  },
   "bin": {
     "claude-canary": "./dist/index.js"
   },
