@@ -6,8 +6,16 @@
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml/badge.svg"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white">
-  <img alt="v1.0.0" src="https://img.shields.io/badge/Claude%20Canary-v1.0.0-f7c948">
+  <img alt="v1.0.1" src="https://img.shields.io/badge/Claude%20Canary-v1.0.1-f7c948">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
+
+<p align="center">
+  <a href="#the-30-second-demo">30-second demo</a> ·
+  <a href="#github-action">GitHub Action</a> ·
+  <a href="docs/PLUGIN_SUITE.md">Plugin suites</a> ·
+  <a href="docs/DISTRIBUTION.md">Distribution</a> ·
+  <a href="SECURITY.md">Security</a>
 </p>
 
 # Claude Code Canary
@@ -372,6 +380,7 @@ Run `claude-canary <command> --help` for command-specific flags.
 | [Security model](docs/SECURITY_MODEL.md) | Trust boundaries and threat model |
 | [Reproducibility](docs/REPRODUCIBILITY.md) | Determinism guarantees and unavoidable variance |
 | [Releasing](docs/RELEASING.md) | v1 tags, Marketplace and release checklist |
+| [Distribution](docs/DISTRIBUTION.md) | npm, Marketplace and curated-list publication checklist |
 | [Roadmap](docs/ROADMAP.md) | What is shipped and what comes next |
 
 ## Contributing
@@ -387,7 +396,7 @@ before opening a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project status
 
-**v1.0.0** freezes the scenario `version: 1`, core run result `schemaVersion: 1`, public package entry point and CLI command names documented here. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
+Current package version: **v1.0.1**. The **v1.0.0** contract froze scenario `version: 1`, core run result `schemaVersion: 1`, the public package entry point and the documented CLI command names. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
 
 ## License
 
