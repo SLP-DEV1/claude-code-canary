@@ -38,7 +38,7 @@ const baseMetrics: RunMetrics = {
 };
 
 describe('headless permission probe', () => {
-  it('creates an isolated plugin and returns the original tool input unchanged', async () => {
+  it('creates isolated MCP/hook instrumentation and returns the original tool input unchanged', async () => {
     const scenario = parseScenario({
       version: 1,
       name: 'permissions',
@@ -51,10 +51,12 @@ describe('headless permission probe', () => {
 
     try {
       expect(probe.extraClaudeArgs).toEqual(expect.arrayContaining([
-        '--plugin-dir',
-        probe.runtimeDir,
+        '--mcp-config',
+        path.join(probe.runtimeDir, 'mcp.json'),
         '--permission-prompt-tool',
         PERMISSION_PROMPT_TOOL,
+        '--plugin-dir',
+        probe.runtimeDir,
       ]));
 
       const server = path.join(probe.runtimeDir, 'scripts', 'permission-server.cjs');
@@ -93,6 +95,24 @@ describe('headless permission probe', () => {
         permissionDenied: 0,
         permissionRequests: [{ toolName: 'Bash' }],
       });
+    } finally {
+      await probe.cleanup();
+    }
+  });
+
+  it('uses only explicit MCP config when prompt metrics are requested without denial metrics', async () => {
+    const scenario = parseScenario({
+      version: 1,
+      name: 'prompt-only',
+      prompt: 'x',
+      expect: { permissions: { max_prompts: 0 } },
+    });
+    const probe = await preparePermissionProbe(scenario);
+    if (!probe) throw new Error('probe missing');
+    try {
+      expect(probe.extraClaudeArgs).toContain('--mcp-config');
+      expect(probe.extraClaudeArgs).toContain('--permission-prompt-tool');
+      expect(probe.extraClaudeArgs).not.toContain('--plugin-dir');
     } finally {
       await probe.cleanup();
     }
