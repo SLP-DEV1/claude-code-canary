@@ -14,6 +14,7 @@ function stringValue(value: unknown): string | undefined {
 
 export function parseStreamMetrics(stdout: string): RunMetrics {
   const toolIds = new Set<string>();
+  const toolNames = new Set<string>();
   const hookEvents = new Set<string>();
   const hookEventSequence: string[] = [];
   let parseErrors = 0;
@@ -30,7 +31,10 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
       return;
     }
     if (!isRecord(value)) return;
-    if (value.type === 'tool_use' && typeof value.id === 'string') toolIds.add(value.id);
+    if (value.type === 'tool_use') {
+      if (typeof value.id === 'string') toolIds.add(value.id);
+      if (typeof value.name === 'string' && value.name.length > 0) toolNames.add(value.name);
+    }
     for (const nested of Object.values(value)) inspectToolUses(nested);
   };
 
@@ -76,6 +80,7 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
 
   return {
     toolCalls: toolIds.size,
+    toolNames: [...toolNames].sort(),
     inputTokens,
     outputTokens,
     cacheReadTokens,
