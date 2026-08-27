@@ -5,14 +5,18 @@
 <p align="center">
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/claude-code-canary"><img alt="npm version" src="https://img.shields.io/npm/v/claude-code-canary?logo=npm"></a>
+  <a href="https://www.npmjs.com/package/claude-code-canary"><img alt="npm downloads" src="https://img.shields.io/npm/dm/claude-code-canary?logo=npm"></a>
+  <a href="https://github.com/SLP-DEV1/claude-code-canary/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/SLP-DEV1/claude-code-canary?display_name=tag"></a>
+  <a href="https://github.com/SLP-DEV1/claude-code-canary/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/SLP-DEV1/claude-code-canary?style=flat&logo=github"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white">
-  <img alt="v1.2.0" src="https://img.shields.io/badge/Claude%20Canary-v1.2.0-f7c948">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
 <p align="center">
-  <a href="#the-30-second-demo">30-second demo</a> ·
+  <a href="#start-in-30-seconds">Start in 30 seconds</a> ·
   <a href="#github-action">GitHub Action</a> ·
+  <a href="#the-30-second-demo">Plugin demo</a> ·
   <a href="docs/PLUGIN_SUITE.md">Plugin suites</a> ·
   <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·
   <a href="docs/AGENT_TEAMS.md">Agent teams</a> ·
@@ -30,6 +34,42 @@ Claude Code changes. Your `CLAUDE.md`, hooks, plugins, MCP servers and permissio
 > **What broke, and which Claude Code release first broke it?**
 
 Canary runs the same scenario from the same Git commit in disposable worktrees, captures tool/token/reported-cost/duration metrics, checks deterministic assertions, compares releases, bisects regressions and builds full plugin compatibility matrices.
+
+## Start in 30 seconds
+
+Install the published CLI and verify the host before spending tokens:
+
+```bash
+npm install -g claude-code-canary
+claude-canary doctor
+claude-canary init
+claude-canary run .canary/basic.canary.yml
+```
+
+Already using GitHub Actions? Add Canary as a CI step and keep the stable `@v1` tag:
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  with:
+    mode: run
+    scenario: .canary/basic.canary.yml
+```
+
+That gives you the same scenario locally and in CI, with machine-readable results in `.canary/results/` and a Markdown summary in GitHub Actions.
+
+**Choose the workflow that matches the problem:**
+
+| Goal | Command / Action mode |
+| --- | --- |
+| Catch a Claude Code release regression | `compare` |
+| Find the first bad Claude Code release | `bisect` |
+| Gate a repository pull request | `pr-check` |
+| Keep recurring CI to one Claude run | `baseline-check` |
+| Test an entire Claude Code plugin surface | `plugin-suite` |
+| Detect MCP schema/capability drift | `mcp-check` |
+| Check host/plugin/MCP readiness without exposing secrets | `doctor` |
 
 ## The 30-second demo
 
@@ -213,7 +253,6 @@ claude-canary team-compare baseline-agent-team.json candidate-agent-team.json
 
 If stdin/stdout is not a real TTY, `team-run` returns `unsupported` rather than silently measuring ordinary `-p` subagents. See [Agent-team regression testing](docs/AGENT_TEAMS.md).
 
-
 ### Gate a pull request
 
 Run the same scenario against the base and head Git refs with one Claude executable:
@@ -235,6 +274,7 @@ claude-canary baseline check .canary/basic.canary.yml
 ```
 
 Baselines use the same regression thresholds while cutting recurring CI from two Claude runs to one. A SHA-256 of the scenario prevents stale snapshots from silently passing after the scenario changes. See [Committed baselines](docs/BASELINES.md).
+
 ### Compare two Claude Code releases
 
 ```bash
@@ -485,7 +525,7 @@ before opening a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project status
 
-Current package version: **v1.1.0**. The **v1.0.0** contract froze scenario `version: 1`, core run result `schemaVersion: 1`, the public package entry point and the documented CLI command names. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
+The current published release is shown by the GitHub and npm badges above. The **v1.0.0** contract froze scenario `version: 1`, core run result `schemaVersion: 1`, the public package entry point and the documented CLI command names. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
 
 ## License
 
