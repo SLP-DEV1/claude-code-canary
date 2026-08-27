@@ -27,8 +27,12 @@ jobs:
     timeout-minutes: 60
     env:
       E2E_MODE: ${{ github.event_name == 'schedule' && 'core' || inputs.mode }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      CLAUDE_CANARY_GROQ_MODEL: qwen/qwen3.6-27b
+      CLAUDE_CANARY_OPENROUTER_MODEL: openrouter/free
+      CLAUDE_CANARY_PROVIDER_DIR: ${{ runner.temp }}/claude-canary-provider-e2e
+      CLAUDE_CANARY_E2E_DIR: ${{ runner.temp }}/claude-canary-live-e2e
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,15 +45,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Check Claude authentication
+      - name: Check free provider authentication
         id: auth
         shell: bash
         run: |
-          if [[ -n "${ANTHROPIC_API_KEY:-}" || -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+          if [[ -n "${GROQ_API_KEY:-}" || -n "${OPENROUTER_API_KEY:-}" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Live Claude E2E skipped: configure ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN as an Actions secret."
+            echo "::notice::Live Claude E2E skipped: configure GROQ_API_KEY and/or OPENROUTER_API_KEY as Actions secrets."
           fi
 
       - name: Explain skipped live test
@@ -59,8 +63,8 @@ jobs:
           {
             echo "### Live Claude E2E skipped"
             echo
-            echo "Configure either \`ANTHROPIC_API_KEY\` or \`CLAUDE_CODE_OAUTH_TOKEN\` in repository Actions secrets."
-            echo "Scheduled runs intentionally stay green when authentication is not configured."
+            echo "Configure \`GROQ_API_KEY\` for the primary free provider and optionally \`OPENROUTER_API_KEY\` for fallback."
+            echo "Scheduled runs intentionally stay green when neither provider key is configured."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install dependencies and build Canary
@@ -82,13 +86,29 @@ jobs:
         shell: bash
         run: claude --version
 
-      - name: Run live CLI E2E
+      - name: Build pinned headless provider router
         if: steps.auth.outputs.configured == 'true'
         shell: bash
         env:
-          CLAUDE_CANARY_E2E_DIR: ${{ runner.temp }}/claude-canary-live-e2e
+          CCASR_SHA: 47e06284af53a6bef86bba0f411977b92db82440
+        run: |
+          ROUTER_DIR="$RUNNER_TEMP/claude-code-agent-sdk-router"
+          rm -rf "$ROUTER_DIR"
+          git init "$ROUTER_DIR"
+          git -C "$ROUTER_DIR" remote add origin https://github.com/sarukas/claude-code-agent-sdk-router.git
+          git -C "$ROUTER_DIR" fetch --depth=1 origin "$CCASR_SHA"
+          git -C "$ROUTER_DIR" checkout --detach FETCH_HEAD
+          npm --prefix "$ROUTER_DIR" ci --ignore-scripts --no-audit --no-fund
+          npm --prefix "$ROUTER_DIR" run build
+          echo "CLAUDE_CANARY_CCASR_CLI=$ROUTER_DIR/dist/cli.js" >> "$GITHUB_ENV"
+
+      - name: Run provider-backed live CLI E2E
+        id: provider
+        if: steps.auth.outputs.configured == 'true'
+        shell: bash
+        env:
           CLAUDE_CANARY_E2E_KEEP: "1"
-        run: node scripts/live-e2e.mjs "$E2E_MODE"
+        run: node scripts/live-provider-e2e.mjs run "$E2E_MODE"
 
       - name: Prepare Action self-test fixture
         if: steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
@@ -131,6 +151,11 @@ jobs:
           git add .canary/action-live.canary.yml
           git commit -m "test: live Action fixture"
 
+      - name: Start selected provider for Action self-test
+        if: steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
+        shell: bash
+        run: node scripts/live-provider-e2e.mjs start-selected
+
       - name: Run local Claude Canary Action
         if: steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
         uses: ./
@@ -138,6 +163,11 @@ jobs:
           mode: run
           scenario: .canary/action-live.canary.yml
           upload-results: "false"
+
+      - name: Stop Action self-test provider router
+        if: always() && steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
+        shell: bash
+        run: node scripts/live-provider-e2e.mjs stop
 
       - name: Upload live E2E evidence
         if: always() && steps.auth.outputs.configured == 'true'
@@ -147,6 +177,7 @@ jobs:
           path: |
             ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results/
             ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/repro-live/
+            ${{ runner.temp }}/claude-canary-provider-e2e/
             .canary/results/
           if-no-files-found: warn
           include-hidden-files: true
@@ -161,5 +192,8 @@ jobs:
             echo
             echo "- Mode: \`$E2E_MODE\`"
             echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
+            echo "- Provider: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
+            echo "- Model: \`${{ steps.provider.outputs.model || 'not completed' }}\`"
+            echo "- OpenRouter fallback used: \`${{ steps.provider.outputs.fallback-used || 'false' }}\`"
             echo "- CLI fixture results: \`${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results\`"
           } >> "$GITHUB_STEP_SUMMARY"
