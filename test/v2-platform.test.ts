@@ -153,7 +153,8 @@ describe('v2 compatibility platform', () => {
   it('keeps every published schema valid JSON', async () => {
     const dir = new URL('../schemas/', import.meta.url);
     for (const name of (await readdir(dir)).filter((file) => file.endsWith('.json'))) {
-      expect(() => JSON.parse(await readFile(new URL(name, dir), 'utf8'))).not.toThrow();
+      const raw = await readFile(new URL(name, dir), 'utf8');
+      expect(() => JSON.parse(raw)).not.toThrow();
     }
   });
 });
