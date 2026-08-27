@@ -1,0 +1,228 @@
+name: Consumer release smoke
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/consumer-smoke.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/consumer-smoke.yml
+  workflow_run:
+    workflows:
+      - Publish npm
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version to verify (for example 1.2.0 or v1.2.0). Leave latest for the newest GitHub release.
+        required: false
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: consumer-release-smoke-${{ github.event_name }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      version: ${{ steps.target.outputs.version }}
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - name: Resolve published release
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${process.env.GH_TOKEN}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'claude-canary-consumer-smoke',
+          };
+
+          const request = async (path) => {
+            const response = await fetch(`https://api.github.com/repos/${process.env.REPOSITORY}${path}`, { headers });
+            if (!response.ok) {
+              throw new Error(`GitHub API ${path} failed: HTTP ${response.status} ${await response.text()}`);
+            }
+            return response.json();
+          };
+
+          let requested = process.env.EVENT_NAME === 'workflow_dispatch'
+            ? (process.env.REQUESTED_VERSION || 'latest').trim()
+            : 'latest';
+
+          let tag;
+          if (!requested || requested === 'latest') {
+            const release = await request('/releases/latest');
+            tag = release.tag_name;
+          } else {
+            tag = requested.startsWith('v') ? requested : `v${requested}`;
+          }
+
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) {
+            throw new Error(`Expected a stable semver release tag, got ${tag}`);
+          }
+
+          const exactRef = await request(`/git/ref/tags/${encodeURIComponent(tag)}`);
+          const major = `v${tag.slice(1).split('.')[0]}`;
+          const majorRef = await request(`/git/ref/tags/${encodeURIComponent(major)}`);
+          if (exactRef.object.type !== 'commit' || majorRef.object.type !== 'commit') {
+            throw new Error('Consumer smoke currently expects lightweight release tags.');
+          }
+          if (exactRef.object.sha !== majorRef.object.sha) {
+            throw new Error(`${major} points to ${majorRef.object.sha}, but ${tag} points to ${exactRef.object.sha}`);
+          }
+
+          const version = tag.slice(1);
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nversion=${version}\nsha=${exactRef.object.sha}\n`);
+          console.log(`Testing ${tag} (${exactRef.object.sha}) through npm and ${major}.`);
+          NODE
+
+  npm-consumer:
+    name: npm consumer
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install published package in an empty consumer project
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          consumer="$RUNNER_TEMP/claude-canary-npm-consumer"
+          rm -rf "$consumer"
+          mkdir -p "$consumer"
+          cd "$consumer"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund "claude-code-canary@$VERSION"
+
+          actual="$(./node_modules/.bin/claude-canary --version)"
+          test "$actual" = "$VERSION"
+          ./node_modules/.bin/claude-canary --help >/dev/null
+          node --input-type=module -e "await import('claude-code-canary'); console.log('Published ESM API import OK')"
+
+          registry="$(npm view "claude-code-canary@$VERSION" version --json | tr -d '"')"
+          test "$registry" = "$VERSION"
+          echo "npm consumer smoke passed for claude-code-canary@$VERSION"
+
+  action-consumer:
+    name: GitHub Action consumer
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create clean external-style MCP fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .canary/mcp tools
+
+          cat > tools/mock-mcp.mjs <<'NODE'
+          import readline from 'node:readline';
+
+          const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+          const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
+
+          rl.on('line', (line) => {
+            if (!line.trim()) return;
+            const message = JSON.parse(line);
+            if (message.method === 'initialize') {
+              send({
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  protocolVersion: message.params?.protocolVersion ?? '2025-11-25',
+                  capabilities: { tools: { listChanged: false } },
+                  serverInfo: { name: 'consumer-smoke-mcp', version: '1.0.0' },
+                },
+              });
+              return;
+            }
+            if (message.method === 'tools/list') {
+              send({
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  tools: [{
+                    name: 'smoke_read',
+                    description: 'Read-only consumer smoke tool',
+                    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+                    annotations: { readOnlyHint: true, destructiveHint: false },
+                  }],
+                },
+              });
+              return;
+            }
+            if (message.id !== undefined) {
+              send({
+                jsonrpc: '2.0',
+                id: message.id,
+                error: { code: -32601, message: 'Method not found' },
+              });
+            }
+          });
+          NODE
+
+          cat > .canary/mcp/consumer-smoke.mcp.yml <<'YAML'
+          version: 1
+          name: consumer-smoke
+
+          server:
+            command: node
+            args:
+              - tools/mock-mcp.mjs
+            cwd: ../..
+            timeout_seconds: 10
+            protocol_version: 2025-11-25
+
+          expect:
+            tools:
+              require:
+                - smoke_read
+              require_read_only:
+                - smoke_read
+              deny_destructive: true
+          YAML
+
+      - name: Run the published floating Action tag
+        id: canary
+        uses: SLP-DEV1/claude-code-canary@v1
+        with:
+          mode: mcp-check
+          mcp-contract: .canary/mcp/consumer-smoke.mcp.yml
+          mcp-require-baseline: "false"
+          upload-results: "false"
+
+      - name: Assert Action outputs
+        env:
+          PASSED: ${{ steps.canary.outputs.passed }}
+          EXIT_CODE: ${{ steps.canary.outputs.exit-code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PASSED" = "true"
+          test "$EXIT_CODE" = "0"
+          echo "GitHub Action consumer smoke passed via @v1"
