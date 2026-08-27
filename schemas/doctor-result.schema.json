@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/doctor-result.schema.json",
+  "title": "Claude Code Canary doctor report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "ok", "canaryVersion", "runtime", "claude", "repository", "provider", "features", "plugins", "mcp", "requiredBinaries", "checks", "warnings"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "ok": { "type": "boolean" },
+    "canaryVersion": { "type": "string", "minLength": 1 },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeVersion", "platform", "arch", "tty", "ci"],
+      "properties": {
+        "nodeVersion": { "type": "string" },
+        "platform": { "type": "string" },
+        "arch": { "type": "string" },
+        "tty": { "type": "boolean" },
+        "ci": { "type": "boolean" }
+      }
+    },
+    "claude": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedExecutable", "executableSource", "available"],
+      "properties": {
+        "requestedExecutable": { "type": "string" },
+        "executableSource": { "enum": ["PATH", "explicit-path", "unresolved"] },
+        "available": { "type": "boolean" },
+        "version": { "type": "string" }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "clean": { "type": "boolean" },
+        "trackedChanges": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "indicators", "credentialsPresent"],
+      "properties": {
+        "mode": { "enum": ["first-party", "custom-base-url", "bedrock", "vertex", "foundry", "mantle", "ambiguous"] },
+        "indicators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "credentialsPresent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anthropicApiKey", "claudeOauthToken", "awsRegion", "awsCredentials", "vertexProject", "googleCredentials", "foundryResource"],
+          "properties": {
+            "anthropicApiKey": { "type": "boolean" },
+            "claudeOauthToken": { "type": "boolean" },
+            "awsRegion": { "type": "boolean" },
+            "awsCredentials": { "type": "boolean" },
+            "vertexProject": { "type": "boolean" },
+            "googleCredentials": { "type": "boolean" },
+            "foundryResource": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agentTeams"],
+      "properties": { "agentTeams": { "type": "boolean" } }
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "ok", "componentTypes", "counts", "dependencies", "warnings"],
+        "properties": {
+          "path": { "type": "string" },
+          "ok": { "type": "boolean" },
+          "name": { "type": "string" },
+          "componentTypes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+          "counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["commands", "agents", "skills", "hooks", "mcpServers", "lspServers", "monitors", "dependencies"],
+            "properties": {
+              "commands": { "type": "integer", "minimum": 0 },
+              "agents": { "type": "integer", "minimum": 0 },
+              "skills": { "type": "integer", "minimum": 0 },
+              "hooks": { "type": "integer", "minimum": 0 },
+              "mcpServers": { "type": "integer", "minimum": 0 },
+              "lspServers": { "type": "integer", "minimum": 0 },
+              "monitors": { "type": "integer", "minimum": 0 },
+              "dependencies": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string" },
+                "version": { "type": "string" },
+                "marketplace": { "type": "string" }
+              }
+            }
+          },
+          "warnings": { "type": "array", "items": { "type": "string" } },
+          "error": { "type": "string" }
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectConfig", "servers", "transports", "warnings"],
+      "properties": {
+        "projectConfig": { "type": "boolean" },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "transport"],
+            "properties": {
+              "name": { "type": "string" },
+              "transport": { "enum": ["stdio", "http", "sse", "unknown"] },
+              "executable": { "type": "string" },
+              "executableAvailable": { "type": "boolean" }
+            }
+          }
+        },
+        "transports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stdio", "http", "sse", "unknown"],
+          "properties": {
+            "stdio": { "type": "integer", "minimum": 0 },
+            "http": { "type": "integer", "minimum": 0 },
+            "sse": { "type": "integer", "minimum": 0 },
+            "unknown": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "requiredBinaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "owner", "name", "executable", "available"],
+        "properties": {
+          "kind": { "enum": ["lsp", "mcp"] },
+          "owner": { "type": "string" },
+          "name": { "type": "string" },
+          "executable": { "type": "string" },
+          "available": { "type": "boolean" }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "ok", "detail"],
+        "properties": {
+          "name": { "type": "string" },
+          "ok": { "type": "boolean" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}
