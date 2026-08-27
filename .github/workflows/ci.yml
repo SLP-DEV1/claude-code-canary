@@ -37,8 +37,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: package.json
-      - run: npm install --ignore-scripts --no-audit --no-fund
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
       - name: Smoke-test public CLI commands
         shell: bash
@@ -68,7 +68,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: package.json
-      - run: npm install --ignore-scripts --no-audit --no-fund
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
       - run: npm pack --dry-run --ignore-scripts
