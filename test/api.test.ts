@@ -1,8 +1,9 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/api.js';
 
 describe('v1 programmatic API', () => {
-  it('exports the supported stable entry points', () => {
+  it('exports the supported stable entry points', async () => {
     for (const name of [
       'ScenarioSchema',
       'loadScenario',
@@ -24,6 +25,8 @@ describe('v1 programmatic API', () => {
     ]) {
       expect(api).toHaveProperty(name);
     }
-    expect(api.CANARY_VERSION).toBe('1.0.0');
+
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect(api.CANARY_VERSION).toBe(pkg.version);
   });
 });
