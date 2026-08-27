@@ -112,7 +112,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
     };
 
     if (setupOk) {
-      const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--no-session-persistence'];
+      const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--verbose', '--no-session-persistence'];
       if (scenario.claude.include_hook_events) args.push('--include-hook-events');
       if (scenario.claude.model) args.push('--model', scenario.claude.model);
       if (scenario.claude.permission_mode) args.push('--permission-mode', scenario.claude.permission_mode);
