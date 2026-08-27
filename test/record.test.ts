@@ -56,7 +56,7 @@ describe('record/replay helpers', () => {
     expect(() => assertPortableCommands(['/opt/tools/test-runner'])).toThrow(/refusing to persist/i);
   });
 
-  it('builds reviewable deterministic replay assertions', () => {
+  it('builds reviewable deterministic replay assertions with headless edit permission', () => {
     const scenario = buildRecordedScenario(
       state,
       ['src/auth.ts', 'test/auth.test.ts'],
@@ -69,6 +69,8 @@ describe('record/replay helpers', () => {
     expect(scenario.recording?.git_commit).toBe(state.startCommit);
     expect(scenario.recording?.claude_version).toBe('2.1.237 (Claude Code)');
     expect(scenario.recording?.config_files).toEqual(['CLAUDE.md', '.mcp.json']);
+    expect(scenario.claude.permission_mode).toBe('acceptEdits');
+    expect(scenario.claude.max_turns).toBe(10);
     expect(scenario.expect?.changed_files?.allow).toEqual(['src/auth.ts', 'test/auth.test.ts']);
     expect(scenario.expect?.changed_files?.require).toEqual(['src/auth.ts', 'test/auth.test.ts']);
     expect(scenario.verify?.commands).toEqual(['npm test']);
