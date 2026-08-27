@@ -4,6 +4,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-27
+
 ### Added
 
 - add relative `compare` regression thresholds for total/input/output tokens, reported cost and tool calls

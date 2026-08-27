@@ -6,7 +6,7 @@
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml/badge.svg"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white">
-  <img alt="v1.0.1" src="https://img.shields.io/badge/Claude%20Canary-v1.0.1-f7c948">
+  <img alt="v1.1.0" src="https://img.shields.io/badge/Claude%20Canary-v1.1.0-f7c948">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
@@ -119,18 +119,16 @@ Requirements:
 - Git
 - an authenticated Claude Code installation or API-key environment suitable for headless Claude Code
 
-Until the npm package is published, install the CLI from source:
+Install the published CLI from npm:
 
 ```bash
-git clone https://github.com/SLP-DEV1/claude-code-canary.git
-cd claude-code-canary
-npm ci --ignore-scripts
-npm run build
-npm link
+npm install -g claude-code-canary
 
 claude-canary --version
 claude-canary doctor
 ```
+
+For repository development, clone this repo and run `npm ci --ignore-scripts && npm run build`.
 
 Then create and run a scenario inside the repository you want to test:
 
@@ -440,7 +438,7 @@ before opening a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project status
 
-Current package version: **v1.0.1**. The **v1.0.0** contract froze scenario `version: 1`, core run result `schemaVersion: 1`, the public package entry point and the documented CLI command names. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
+Current package version: **v1.1.0**. The **v1.0.0** contract froze scenario `version: 1`, core run result `schemaVersion: 1`, the public package entry point and the documented CLI command names. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
 
 ## License
 
