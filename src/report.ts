@@ -18,13 +18,15 @@ export function formatRun(result: RunResult): string {
   const lines = [
     `Claude Code Canary — ${result.scenario}`,
     '',
-    `Result:        ${result.passed ? 'PASS' : 'FAIL'}`,
-    `Executable:    ${result.executable}`,
-    `Tool calls:    ${result.metrics.toolCalls}`,
-    `Total tokens:  ${tokens(result.metrics.totalTokens)}`,
-    `Reported cost: ${cost(result.metrics.costUsd)}`,
-    `Duration:      ${duration(result.durationMs)}`,
-    `Changed:       ${result.changedFiles.length} file(s)`,
+    `Result:             ${result.passed ? 'PASS' : 'FAIL'}`,
+    `Executable:         ${result.executable}`,
+    `Tool calls:         ${result.metrics.toolCalls}`,
+    `Total tokens:       ${tokens(result.metrics.totalTokens)}`,
+    `Reported cost:      ${cost(result.metrics.costUsd)}`,
+    `Permission prompts: ${result.metrics.permissionPrompts}`,
+    `Permission denied:  ${result.metrics.permissionDenied}`,
+    `Duration:           ${duration(result.durationMs)}`,
+    `Changed:            ${result.changedFiles.length} file(s)`,
   ];
 
   if (result.failures.length > 0) {
@@ -35,12 +37,20 @@ export function formatRun(result: RunResult): string {
   return lines.join('\n');
 }
 
-export function formatComparison(baseline: RunResult, candidate: RunResult): string {
+export function formatComparison(
+  baseline: RunResult,
+  candidate: RunResult,
+  regressionFailures: string[] = [],
+): string {
   const rows: Array<[string, string, string]> = [
     ['Result', baseline.passed ? 'PASS' : 'FAIL', candidate.passed ? 'PASS' : 'FAIL'],
     ['Tool calls', String(baseline.metrics.toolCalls), String(candidate.metrics.toolCalls)],
+    ['Input tokens', tokens(baseline.metrics.inputTokens), tokens(candidate.metrics.inputTokens)],
+    ['Output tokens', tokens(baseline.metrics.outputTokens), tokens(candidate.metrics.outputTokens)],
     ['Total tokens', tokens(baseline.metrics.totalTokens), tokens(candidate.metrics.totalTokens)],
     ['Reported cost', cost(baseline.metrics.costUsd), cost(candidate.metrics.costUsd)],
+    ['Permission prompts', String(baseline.metrics.permissionPrompts), String(candidate.metrics.permissionPrompts)],
+    ['Permission denied', String(baseline.metrics.permissionDenied), String(candidate.metrics.permissionDenied)],
     ['Duration', duration(baseline.durationMs), duration(candidate.durationMs)],
   ];
 
@@ -56,7 +66,14 @@ export function formatComparison(baseline: RunResult, candidate: RunResult): str
     '',
   ];
 
+  if (regressionFailures.length > 0) {
+    lines.push('Comparison regressions:');
+    for (const failure of regressionFailures) lines.push(`  - ${failure}`);
+    lines.push('');
+  }
+
   if (baseline.passed && !candidate.passed) lines.push('Candidate regression detected.');
+  else if (regressionFailures.length > 0) lines.push('Candidate passed its standalone assertions but violated configured comparison regression thresholds.');
   else if (!baseline.passed && candidate.passed) lines.push('Candidate fixes the baseline failure.');
   else if (baseline.passed && candidate.passed) lines.push('Both runs passed.');
   else lines.push('Both runs failed. Compare failure details in the result artifacts.');
