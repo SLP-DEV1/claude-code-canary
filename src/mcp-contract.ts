@@ -604,9 +604,11 @@ export function compareMcpSnapshots(baseline: McpContractSnapshot, candidate: Mc
 
 function slug(value: string): string {
   const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
-  const withoutLeading = normalized.replace(/^-+/, '');
-  const withoutTrailing = withoutLeading.replace(/-+$/, '');
-  return withoutTrailing.slice(0, 80) || 'mcp';
+  let start = 0;
+  while (start < normalized.length && normalized.charCodeAt(start) === 45) start += 1;
+  let end = normalized.length;
+  while (end > start && normalized.charCodeAt(end - 1) === 45) end -= 1;
+  return normalized.slice(start, Math.min(end, start + 80)) || 'mcp';
 }
 
 export function defaultMcpSnapshotPath(contract: McpContract, cwd = process.cwd()): string {
