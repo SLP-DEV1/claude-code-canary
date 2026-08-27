@@ -20,6 +20,15 @@ describe('marketplace action runner', () => {
       .toEqual(['baseline', 'check', '.canary/basic.canary.yml', '--baseline', '.canary/baselines/auth.json']);
   });
 
+
+  it('builds a side-effect-free MCP contract gate', () => {
+    expect(buildCliArgs({
+      mode: 'mcp-check', mcpContract: '.canary/mcp/github.mcp.yml', baseline: '.canary/mcp/baselines/github.json', mcpRequireBaseline: true,
+    })).toEqual([
+      'mcp-check', '.canary/mcp/github.mcp.yml', '--baseline', '.canary/mcp/baselines/github.json', '--require-baseline',
+    ]);
+  });
+
   it('hydrates exact pull request SHAs from the GitHub event payload', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'canary-action-event-'));
     const eventPath = path.join(dir, 'event.json');

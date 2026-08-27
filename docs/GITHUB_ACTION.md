@@ -8,6 +8,7 @@ Supported modes:
 - `run`
 - `pr-check`
 - `baseline-check`
+- `mcp-check`
 - `plugin-matrix`
 - `plugin-suite`
 
@@ -70,6 +71,20 @@ Commit the generated `.canary/baselines/<scenario-name>.json`, then use:
 A custom snapshot can be selected with `baseline:`. Baseline checks execute Claude only once and apply the same `regressions` thresholds against stored known-good metrics. The snapshot includes a SHA-256 of the scenario YAML, so changing the scenario without refreshing the baseline fails closed.
 
 See [Committed baselines](BASELINES.md).
+
+## MCP contract gate
+
+MCP contract checks do not require Claude or a model credential. They initialize the configured stdio MCP server directly and compare its exposed protocol surface with explicit expectations and, by default, a committed known-good snapshot.
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: mcp-check
+    mcp-contract: .canary/mcp/github.mcp.yml
+    mcp-require-baseline: true
+```
+
+The optional shared `baseline` input selects a non-default MCP snapshot path in this mode. See [MCP contract testing](MCP_CONTRACTS.md).
 
 ## Plugin suite quick start
 
@@ -146,13 +161,15 @@ You can use `versions` or `last` instead of `from`/`to`.
 
 | Input | Default | Used by | Description |
 | --- | --- | --- | --- |
-| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `plugin-matrix`, or `plugin-suite` |
+| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix`, or `plugin-suite` |
 | `scenario` | mode-specific | compare/run/pr-check/baseline-check/matrix | Scenario path |
 | `from` | — | compare/plugin modes | Baseline release for compare, or oldest exact release in plugin range mode |
 | `to` | compare: `latest` | compare/plugin modes | Candidate release for compare, or newest exact release in plugin range mode |
 | `base-ref` | PR base SHA / `origin/main` | pr-check | Git ref for the baseline worktree |
 | `head-ref` | PR head SHA / `HEAD` | pr-check | Git ref for the candidate worktree |
-| `baseline` | generated default | baseline-check | Optional committed baseline JSON path |
+| `baseline` | generated default | baseline-check/mcp-check | Optional committed baseline JSON path |
+| `mcp-contract` | `.canary/mcp/server.mcp.yml` | mcp-check | MCP contract YAML path |
+| `mcp-require-baseline` | `true` | mcp-check | Fail when no reviewed MCP baseline exists |
 | `comment-pr` | `false` | pr-check | Best-effort stable PR report comment; requires `pull-requests: write` |
 | `plugin` | — | plugin modes | Plugin directory |
 | `suite` | auto | plugin-suite | Generated Canary plugin-suite directory |
