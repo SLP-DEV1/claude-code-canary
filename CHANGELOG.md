@@ -15,13 +15,13 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - detect asynchronous provider rate/quota failures before deciding whether hosted live E2E is eligible for a capacity fallback
 - recognize explicit upstream model-availability failures as provider fallback conditions without treating arbitrary 404/model-typo failures as eligible
 - remove patch-version literals from stable API/Action tests so future patch releases validate against current package metadata instead of a stale `1.0.0` expectation
-- raise generated plugin scenarios to a 160,000-token live-E2E budget so current Claude Code system/tool context does not trip the normal 80,000-token smoke-test guardrail
+- raise generated plugin scenarios to a 200,000-token live-E2E budget so current Claude Code system/tool context does not trip the normal 80,000-token smoke-test guardrail
 
 ### Changed
 
 - label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
 - add a real Claude Code E2E harness with scheduled `core` coverage and a broader manual `full` suite for release validation
-- prefer Gemini `gemini-2.5-flash` for hosted free live E2E, retain Groq for existing configurations, and use OpenRouter `openrouter/free` only for recognized primary-provider capacity/availability failures
+- prefer stable Gemini `gemini-3.6-flash` for hosted free live E2E, retain Groq for existing configurations, and use OpenRouter `openrouter/free` only for recognized primary-provider capacity/availability failures
 - pin the headless Claude-to-provider adapter used by hosted live tests to an exact upstream commit that supports Gemini, OpenRouter and Groq routes
 - add version-metadata consistency checks and a release-version helper so `package.json`, `package-lock.json` and the public CLI version stay synchronized
 - keep Dependabot minor/patch updates grouped while deferring known v1-breaking dependency majors for explicit runtime/toolchain work
