@@ -294,7 +294,8 @@ class StdioMcpClient {
       if (message.method === 'notifications/prompts/list_changed') this.notifications.promptsListChanged += 1;
       if (message.method === 'notifications/resources/list_changed') this.notifications.resourcesListChanged += 1;
       if (message.id !== undefined) {
-        this.write({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not supported by Canary contract inspector' } });
+        if (message.method === 'ping') this.write({ jsonrpc: '2.0', id: message.id, result: {} });
+        else this.write({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not supported by Canary contract inspector' } });
       }
       return;
     }

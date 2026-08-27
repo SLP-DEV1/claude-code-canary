@@ -75,7 +75,7 @@ Canary is not another transcript viewer or generic model leaderboard. It is a **
 
 ## GitHub Action
 
-The v1 Action supports `compare`, `run`, `pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`. `pr-check` can also update one stable pull-request comment with the regression table when `comment-pr: true` is enabled.
+The v1 Action supports `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`. `pr-check` can also update one stable pull-request comment with the regression table when `comment-pr: true` is enabled.
 
 A plugin compatibility gate can be as small as:
 

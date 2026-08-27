@@ -1,6 +1,6 @@
 # Claude Canary GitHub Action
 
-Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, committed-baseline checks and plugin compatibility suites.
+Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, MCP contract checks, committed-baseline checks and plugin compatibility suites.
 
 Supported modes:
 
@@ -119,7 +119,7 @@ jobs:
           last: 10
 ```
 
-For the current exact immutable v1 patch release use `@v1.0.1` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
+For the current exact immutable v1 patch release use `@v1.1.0` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
 
 ## Compare two Claude Code releases
 
@@ -197,7 +197,7 @@ Version selectors for plugin modes are mutually exclusive in practice: use one o
 
 ## Step Summary and artifacts
 
-`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create Markdown reports. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
+`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create report artifacts. `mcp-check` writes its bounded Markdown contract report directly into the Step Summary through the Action runner. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
 
 For modes without a combined Markdown report, the Action adds a bounded excerpt of the live CLI output to the summary. Full progress remains in the job log.
 
