@@ -5,6 +5,7 @@ import type { Scenario } from './config.js';
 import { evaluateExpectations } from './evaluate.js';
 import { createDetachedWorktree, getChangedFiles, getRepoRoot, getTrackedChanges, resolveCommit } from './git.js';
 import { parseStreamMetrics } from './metrics.js';
+import { mergePermissionProbeMetrics, preparePermissionProbe, type PreparedPermissionProbe } from './permission-probe.js';
 import { runShellCommand, spawnCapture } from './process.js';
 import type { CommandSummary, ProcessResult, RunResult } from './types.js';
 
@@ -50,20 +51,21 @@ async function currentFileHash(file: string): Promise<string | null> {
   }
 }
 
-function needsLifecycleEvents(scenario: Scenario): boolean {
+function needsHookEvents(scenario: Scenario): boolean {
   return Boolean(
     scenario.claude.include_hook_events
-    || scenario.expect?.permissions
     || scenario.expect?.hooks
-    || scenario.regressions?.max_permission_prompts_increase !== undefined
-    || scenario.regressions?.max_permission_denied_increase !== undefined
     || scenario.regressions?.require_same_hook_sequence,
   );
 }
 
+function containsFlag(args: string[], flag: string): boolean {
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+}
+
 export function buildClaudeArgs(scenario: Scenario, extraClaudeArgs: string[] = []): string[] {
   const args = ['-p', scenario.prompt, '--output-format', 'stream-json', '--verbose', '--no-session-persistence'];
-  if (needsLifecycleEvents(scenario)) args.push('--include-hook-events');
+  if (needsHookEvents(scenario)) args.push('--include-hook-events');
   if (scenario.claude.model) args.push('--model', scenario.claude.model);
   if (scenario.claude.permission_mode) args.push('--permission-mode', scenario.claude.permission_mode);
   if (scenario.claude.max_turns !== undefined) args.push('--max-turns', String(scenario.claude.max_turns));
@@ -110,9 +112,16 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
   const failures: string[] = [];
   const executable = options.executableOverride ?? scenario.claude.executable;
   let prepared: PreparedRun | undefined;
+  let permissionProbe: PreparedPermissionProbe | undefined;
 
   try {
     prepared = options.prepareWorktree ? await options.prepareWorktree(worktree.path) : undefined;
+    permissionProbe = await preparePermissionProbe(scenario);
+
+    const callerArgs = [...scenario.claude.args, ...(prepared?.extraClaudeArgs ?? [])];
+    if (permissionProbe && containsFlag(callerArgs, '--permission-prompt-tool')) {
+      throw new Error('Permission assertions/regressions cannot be combined with a caller-supplied --permission-prompt-tool because Canary could not observe those prompt decisions reliably.');
+    }
 
     let setupOk = true;
     for (const command of scenario.setup?.commands ?? []) {
@@ -135,12 +144,13 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
     };
 
     if (setupOk) {
-      const args = buildClaudeArgs(scenario, prepared?.extraClaudeArgs ?? []);
+      const extraArgs = [...(prepared?.extraClaudeArgs ?? []), ...(permissionProbe?.extraClaudeArgs ?? [])];
+      const args = buildClaudeArgs(scenario, extraArgs);
 
       claudeResult = await spawnCapture(executable, args, {
         cwd: worktree.path,
         timeoutMs: scenario.claude.timeout_seconds * 1000,
-        env: { ...process.env, ...scenario.claude.env, ...prepared?.env },
+        env: { ...process.env, ...scenario.claude.env, ...prepared?.env, ...permissionProbe?.env },
       });
 
       if (claudeResult.timedOut) failures.push(`Claude timed out after ${scenario.claude.timeout_seconds}s`);
@@ -148,9 +158,17 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
       if (claudeResult.code !== 0) failures.push(`Claude exited with code ${claudeResult.code}`);
     }
 
-    const metrics = parseStreamMetrics(claudeResult.stdout);
+    let metrics = parseStreamMetrics(claudeResult.stdout);
     if (setupOk && metrics.parseErrors > 0) {
       failures.push(`Claude stream-json contained ${metrics.parseErrors} malformed non-empty line${metrics.parseErrors === 1 ? '' : 's'}; metrics and assertions would be unreliable.`);
+    }
+
+    if (permissionProbe) {
+      try {
+        metrics = mergePermissionProbeMetrics(metrics, await permissionProbe.collect());
+      } catch (error) {
+        failures.push(`Permission instrumentation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
 
     if (setupOk) {
@@ -187,9 +205,13 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
     return result;
   } finally {
     try {
-      await prepared?.cleanup?.();
+      await permissionProbe?.cleanup();
     } finally {
-      await worktree.cleanup();
+      try {
+        await prepared?.cleanup?.();
+      } finally {
+        await worktree.cleanup();
+      }
     }
   }
 }
