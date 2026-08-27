@@ -1,0 +1,194 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  McpContractSchema,
+  compareMcpSnapshots,
+  evaluateMcpExpectations,
+  inspectMcpContract,
+  loadMcpSnapshot,
+  writeMcpSnapshot,
+  type McpContractSnapshot,
+} from '../src/mcp-contract.js';
+
+const SERVER = String.raw`
+let buffer = '';
+process.stdin.setEncoding('utf8');
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  for (;;) {
+    const i = buffer.indexOf('\n');
+    if (i < 0) break;
+    const line = buffer.slice(0, i).trim();
+    buffer = buffer.slice(i + 1);
+    if (!line) continue;
+    const msg = JSON.parse(line);
+    if (msg.method === 'notifications/initialized') continue;
+    if (msg.method === 'initialize') {
+      send({ jsonrpc: '2.0', id: msg.id, result: {
+        protocolVersion: '2025-11-25',
+        capabilities: {
+          tools: { listChanged: true },
+          prompts: { listChanged: true },
+          resources: { listChanged: true, subscribe: true }
+        },
+        serverInfo: { name: 'mock-mcp', version: '1.0.0' }
+      }});
+      continue;
+    }
+    if (msg.method === 'tools/list') {
+      if (msg.params && msg.params.cursor === 'page-2') {
+        send({ jsonrpc: '2.0', id: msg.id, result: { tools: [{
+          name: 'write_note',
+          inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+          annotations: { destructiveHint: false, readOnlyHint: false }
+        }] }});
+      } else {
+        send({ jsonrpc: '2.0', id: msg.id, result: { tools: [{
+          name: 'get_weather',
+          inputSchema: { required: ['city'], properties: { city: { type: 'string' } }, type: 'object' },
+          annotations: { readOnlyHint: true }
+        }], nextCursor: 'page-2' }});
+        send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+      }
+      continue;
+    }
+    if (msg.method === 'prompts/list') {
+      send({ jsonrpc: '2.0', id: msg.id, result: { prompts: [{ name: 'summarize', arguments: [{ name: 'topic', required: true }] }] }});
+      continue;
+    }
+    if (msg.method === 'resources/list') {
+      send({ jsonrpc: '2.0', id: msg.id, result: { resources: [{ uri: 'file:///docs/readme', name: 'readme', mimeType: 'text/markdown' }] }});
+      continue;
+    }
+    if (msg.method === 'resources/templates/list') {
+      send({ jsonrpc: '2.0', id: msg.id, result: { resourceTemplates: [{ uriTemplate: 'file:///{path}', name: 'files', mimeType: 'text/plain' }] }});
+      continue;
+    }
+    send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'unknown method' } });
+  }
+});
+`;
+
+async function fixture() {
+  const dir = await mkdtemp(path.join(tmpdir(), 'canary-mcp-'));
+  const server = path.join(dir, 'server.cjs');
+  await writeFile(server, SERVER, 'utf8');
+  const contract = McpContractSchema.parse({
+    version: 1,
+    name: 'mock-contract',
+    server: { command: process.execPath, args: [server], timeout_seconds: 5 },
+    expect: {
+      tools: { require: ['get_weather', 'write_note'], require_read_only: ['get_weather'], deny_destructive: true },
+      prompts: { require: ['summarize'] },
+      resources: { require: ['file:///docs/readme'] },
+      resource_templates: { require: ['file:///{path}'] },
+      capabilities: { tools_list_changed: true, resources_subscribe: true },
+    },
+  });
+  return { dir, server, contract };
+}
+
+describe('MCP contract testing', () => {
+  it('inspects a real stdio MCP server with pagination and list_changed notifications', async () => {
+    const { dir, contract } = await fixture();
+    try {
+      const snapshot = await inspectMcpContract(contract, { cwd: dir });
+      expect(snapshot.protocolVersion).toBe('2025-11-25');
+      expect(snapshot.serverInfo).toMatchObject({ name: 'mock-mcp', version: '1.0.0' });
+      expect(snapshot.tools.map((tool) => tool.name)).toEqual(['get_weather', 'write_note']);
+      expect(snapshot.tools[0].inputSchema).toEqual({
+        properties: { city: { type: 'string' } },
+        required: ['city'],
+        type: 'object',
+      });
+      expect(snapshot.prompts.map((prompt) => prompt.name)).toEqual(['summarize']);
+      expect(snapshot.resources.map((resource) => resource.uri)).toEqual(['file:///docs/readme']);
+      expect(snapshot.resourceTemplates.map((resource) => resource.uriTemplate)).toEqual(['file:///{path}']);
+      expect(snapshot.observedNotifications.toolsListChanged).toBe(1);
+      expect(snapshot.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      expect(evaluateMcpExpectations(contract, snapshot)).toEqual({ passed: true, failures: [] });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports expectation failures for missing, destructive and capability regressions', async () => {
+    const { dir, contract } = await fixture();
+    try {
+      const snapshot = await inspectMcpContract(contract, { cwd: dir });
+      const strict = McpContractSchema.parse({
+        ...contract,
+        expect: {
+          tools: {
+            require: ['missing_tool'],
+            deny: ['write_note'],
+            require_read_only: ['write_note'],
+            deny_destructive: true,
+          },
+          capabilities: { tools_list_changed: false },
+        },
+      });
+      const result = evaluateMcpExpectations(strict, {
+        ...snapshot,
+        tools: snapshot.tools.map((tool) => tool.name === 'write_note'
+          ? { ...tool, annotations: { destructiveHint: true, readOnlyHint: false } }
+          : tool),
+      });
+      expect(result.passed).toBe(false);
+      expect(result.failures.join('\n')).toContain('required entry missing_tool is missing');
+      expect(result.failures.join('\n')).toContain('denied entry write_note is exposed');
+      expect(result.failures.join('\n')).toContain('write_note is not annotated readOnlyHint=true');
+      expect(result.failures.join('\n')).toContain('destructive tool write_note is exposed');
+      expect(result.failures.join('\n')).toContain('tools.listChanged expected false but was true');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('classifies removals and schema changes as breaking while additions remain informational', async () => {
+    const { dir, contract } = await fixture();
+    try {
+      const baseline = await inspectMcpContract(contract, { cwd: dir });
+      const candidate: McpContractSnapshot = {
+        ...baseline,
+        tools: [
+          { ...baseline.tools.find((tool) => tool.name === 'get_weather')!, inputSchema: { type: 'object', properties: { city: { type: 'number' } } } },
+          { name: 'new_tool', inputSchema: { type: 'object' } },
+        ],
+        prompts: [],
+        capabilities: { ...baseline.capabilities, tools: { listChanged: false } },
+      };
+      const comparison = compareMcpSnapshots(baseline, candidate);
+      expect(comparison.passed).toBe(false);
+      expect(comparison.breakingChanges.join('\n')).toContain('tools: contract changed for get_weather');
+      expect(comparison.breakingChanges.join('\n')).toContain('tools: removed write_note');
+      expect(comparison.breakingChanges.join('\n')).toContain('prompts: removed summarize');
+      expect(comparison.breakingChanges.join('\n')).toContain('capabilities: tools.listChanged was removed or disabled');
+      expect(comparison.nonBreakingChanges.join('\n')).toContain('tools: added new_tool');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writes fingerprinted snapshots and rejects tampering', async () => {
+    const { dir, server } = await fixture();
+    try {
+      const contractPath = path.join(dir, 'mock.mcp.yml');
+      await writeFile(contractPath, `version: 1\nname: mock-contract\nserver:\n  command: ${JSON.stringify(process.execPath)}\n  args:\n    - ${JSON.stringify(server)}\n  timeout_seconds: 5\n`, 'utf8');
+      const output = path.join(dir, 'baseline.json');
+      const written = await writeMcpSnapshot(contractPath, { cwd: dir, output });
+      const loaded = await loadMcpSnapshot(output);
+      expect(loaded.fingerprint).toBe(written.snapshot.fingerprint);
+
+      const tampered = JSON.parse(await readFile(output, 'utf8')) as McpContractSnapshot;
+      tampered.tools[0].name = 'tampered';
+      await writeFile(output, JSON.stringify(tampered), 'utf8');
+      await expect(loadMcpSnapshot(output)).rejects.toThrow('fingerprint does not match');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
