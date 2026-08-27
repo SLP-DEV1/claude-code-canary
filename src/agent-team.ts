@@ -276,7 +276,7 @@ export function compareAgentTeamResults(baseline: AgentTeamRunResult, candidate:
   const failures: string[] = [];
   if (baseline.scenario !== candidate.scenario) failures.push(`Scenario mismatch: ${baseline.scenario} vs ${candidate.scenario}`);
   if (candidate.status !== 'passed') failures.push(`Candidate team run status is ${candidate.status}`);
-  if (baseline.status === 'unsupported') failures.push('Baseline team run is unsupported and cannot establish a compatibility contract');
+  if (baseline.status !== 'passed') failures.push(`Baseline team run status is ${baseline.status} and cannot establish a compatibility contract`);
 
   const baselineNames = new Set(baseline.metrics.teammates.map((member) => member.name));
   const candidateNames = new Set(candidate.metrics.teammates.map((member) => member.name));
@@ -355,12 +355,14 @@ async function defaultInteractiveRunner(executable: string, args: string[], opti
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd: options.cwd, env: options.env, stdio: 'inherit', windowsHide: false });
     let timedOut = false;
+    let forceTimer: NodeJS.Timeout | undefined;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
+      forceTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
     }, options.timeoutMs);
-    child.once('error', (error) => { clearTimeout(timer); reject(error); });
-    child.once('exit', (code, signal) => { clearTimeout(timer); resolve({ code, signal, timedOut }); });
+    child.once('error', (error) => { clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); reject(error); });
+    child.once('exit', (code, signal) => { clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); resolve({ code, signal, timedOut }); });
   });
 }
 
@@ -456,6 +458,7 @@ export async function runAgentTeam(scenario: AgentTeamScenario, options: RunAgen
     const failures = [...observed.failures];
     if (processResult.timedOut) failures.push(`Interactive Claude team session timed out after ${scenario.claude.timeout_seconds}s`);
     if (processResult.code !== 0 && processResult.code !== null) failures.push(`Interactive Claude team session exited with code ${processResult.code}`);
+    if (processResult.signal) failures.push(`Interactive Claude team session terminated by signal ${processResult.signal}`);
     failures.push(...evaluateAgentTeamExpectations(scenario, metrics));
     if (metrics.teammateCount === 0) failures.push('No real agent-team teammate activity was observed; verify that the selected Claude Code release supports agent teams and that the prompt explicitly creates a team.');
 

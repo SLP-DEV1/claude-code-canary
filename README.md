@@ -15,6 +15,7 @@
   <a href="#github-action">GitHub Action</a> ·
   <a href="docs/PLUGIN_SUITE.md">Plugin suites</a> ·
   <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·
+  <a href="docs/AGENT_TEAMS.md">Agent teams</a> ·
   <a href="docs/DISTRIBUTION.md">Distribution</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
@@ -70,6 +71,7 @@ claude-canary bisect .canary/plugin-smoke.canary.yml \
 | "Did this PR make the agent worse?" | Compare base vs head with the same Claude executable and fail on configured deltas. |
 | "Can CI do this without paying for two runs every time?" | Commit a known-good metric baseline and execute only the candidate. |
 | "Did my MCP server silently change?" | Snapshot tools/prompts/resources and fail on removed tools, schema changes or capability regressions. |
+| "Did Claude change how my agent team coordinates?" | Observe real interactive teammate/task lifecycle signals and compare privacy-safe structural snapshots. |
 
 Canary is not another transcript viewer or generic model leaderboard. It is a **regression layer for real Claude Code workflows**.
 
@@ -183,6 +185,23 @@ claude-canary mcp-check .canary/mcp/github.mcp.yml --require-baseline
 ```
 
 Canary snapshots tools and JSON Schemas, prompts, resources, resource templates, capabilities and observed `list_changed` signals. Removed tools, schema changes and disabled capabilities are breaking by default; additions are reported without failing CI. Tool safety annotations can also be asserted without executing the tool. See [MCP contract testing](docs/MCP_CONTRACTS.md).
+
+### Observe a real agent team
+
+Agent teams are an experimental upstream surface and currently require a real interactive Claude Code session. Canary keeps that distinction explicit:
+
+```bash
+claude-canary team-run examples/agent-team.team.yml --version latest
+```
+
+The temporary observer records teammate names/types, task IDs/state, message counts, idle transitions and stop failures — **not** teammate prompts, message bodies, task descriptions or transcripts. Saved snapshots can be compared non-interactively:
+
+```bash
+claude-canary team-compare baseline-agent-team.json candidate-agent-team.json
+```
+
+If stdin/stdout is not a real TTY, `team-run` returns `unsupported` rather than silently measuring ordinary `-p` subagents. See [Agent-team regression testing](docs/AGENT_TEAMS.md).
+
 
 ### Gate a pull request
 
