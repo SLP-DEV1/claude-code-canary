@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isExactVersion, platformId } from '../src/versions.js';
+import { isExactVersion, platformId, validatePlatformId } from '../src/versions.js';
 
 describe('Claude Code version manager', () => {
   it('maps supported host platforms to Anthropic release platform ids', () => {
@@ -11,6 +11,14 @@ describe('Claude Code version manager', () => {
 
   it('rejects unsupported architectures', () => {
     expect(() => platformId('linux', 'ia32', false)).toThrow(/Unsupported architecture/);
+  });
+
+  it('accepts only known platform override ids', () => {
+    expect(validatePlatformId('linux-x64')).toBe('linux-x64');
+    expect(validatePlatformId('darwin-arm64')).toBe('darwin-arm64');
+    expect(() => validatePlatformId('../linux-x64')).toThrow(/unsupported claude code platform id/i);
+    expect(() => validatePlatformId('linux-x64/../../escape')).toThrow(/unsupported claude code platform id/i);
+    expect(() => validatePlatformId('linux-x64\u0000')).toThrow(/unsupported claude code platform id/i);
   });
 
   it('accepts exact release versions only', () => {
