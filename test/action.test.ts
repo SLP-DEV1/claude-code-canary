@@ -24,6 +24,8 @@ describe('Claude Canary GitHub Action', () => {
     expect(action.inputs?.['base-ref']?.default).toBe('');
     expect(action.inputs?.['head-ref']?.default).toBe('');
     expect(action.inputs?.baseline?.default).toBe('');
+    expect(action.inputs?.['mcp-contract']?.default).toBe('');
+    expect(action.inputs?.['mcp-require-baseline']?.default).toBe('true');
     expect(action.inputs?.['comment-pr']?.default).toBe('false');
     expect(action.inputs?.last?.default).toBe('10');
     expect(action.inputs?.['max-runs']?.default).toBe('200');

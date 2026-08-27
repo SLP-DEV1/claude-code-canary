@@ -20,7 +20,7 @@ Current stable release: **v1.1.0**.
 
 **Goal:** cover the Claude Code extension surfaces most likely to break across releases.
 
-### P0 — MCP contract testing
+### P0 — MCP contract testing *(implemented for v1.2)*
 
 Add first-class regression tests for MCP servers and Claude Code's MCP integration.
 

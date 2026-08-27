@@ -1,6 +1,6 @@
 # Claude Canary GitHub Action
 
-Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, committed-baseline checks and plugin compatibility suites.
+Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, MCP contract checks, committed-baseline checks and plugin compatibility suites.
 
 Supported modes:
 
@@ -8,6 +8,7 @@ Supported modes:
 - `run`
 - `pr-check`
 - `baseline-check`
+- `mcp-check`
 - `plugin-matrix`
 - `plugin-suite`
 
@@ -71,6 +72,20 @@ A custom snapshot can be selected with `baseline:`. Baseline checks execute Clau
 
 See [Committed baselines](BASELINES.md).
 
+## MCP contract gate
+
+MCP contract checks do not require Claude or a model credential. They initialize the configured stdio MCP server directly and compare its exposed protocol surface with explicit expectations and, by default, a committed known-good snapshot.
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: mcp-check
+    mcp-contract: .canary/mcp/github.mcp.yml
+    mcp-require-baseline: true
+```
+
+The optional shared `baseline` input selects a non-default MCP snapshot path in this mode. See [MCP contract testing](MCP_CONTRACTS.md).
+
 ## Plugin suite quick start
 
 Commit a generated/reviewed plugin smoke suite to your repository, then create `.github/workflows/claude-canary.yml`:
@@ -104,7 +119,7 @@ jobs:
           last: 10
 ```
 
-For the current exact immutable v1 patch release use `@v1.0.1` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
+For the current exact immutable v1 patch release use `@v1.1.0` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
 
 ## Compare two Claude Code releases
 
@@ -146,13 +161,15 @@ You can use `versions` or `last` instead of `from`/`to`.
 
 | Input | Default | Used by | Description |
 | --- | --- | --- | --- |
-| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `plugin-matrix`, or `plugin-suite` |
+| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `mcp-check`, `plugin-matrix`, or `plugin-suite` |
 | `scenario` | mode-specific | compare/run/pr-check/baseline-check/matrix | Scenario path |
 | `from` | — | compare/plugin modes | Baseline release for compare, or oldest exact release in plugin range mode |
 | `to` | compare: `latest` | compare/plugin modes | Candidate release for compare, or newest exact release in plugin range mode |
 | `base-ref` | PR base SHA / `origin/main` | pr-check | Git ref for the baseline worktree |
 | `head-ref` | PR head SHA / `HEAD` | pr-check | Git ref for the candidate worktree |
-| `baseline` | generated default | baseline-check | Optional committed baseline JSON path |
+| `baseline` | generated default | baseline-check/mcp-check | Optional committed baseline JSON path |
+| `mcp-contract` | `.canary/mcp/server.mcp.yml` | mcp-check | MCP contract YAML path |
+| `mcp-require-baseline` | `true` | mcp-check | Fail when no reviewed MCP baseline exists |
 | `comment-pr` | `false` | pr-check | Best-effort stable PR report comment; requires `pull-requests: write` |
 | `plugin` | — | plugin modes | Plugin directory |
 | `suite` | auto | plugin-suite | Generated Canary plugin-suite directory |
@@ -180,7 +197,7 @@ Version selectors for plugin modes are mutually exclusive in practice: use one o
 
 ## Step Summary and artifacts
 
-`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create Markdown reports. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
+`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create report artifacts. `mcp-check` writes its bounded Markdown contract report directly into the Step Summary through the Action runner. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
 
 For modes without a combined Markdown report, the Action adds a bounded excerpt of the live CLI output to the summary. Full progress remains in the job log.
 

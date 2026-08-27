@@ -1,5 +1,5 @@
 name: Claude Code Canary
-description: Regression-test Claude Code releases, pull requests, committed baselines, plugins and configs with deterministic scenarios.
+description: Regression-test Claude Code releases, pull requests, MCP contracts, committed baselines, plugins and configs with deterministic scenarios.
 author: SLP-DEV1
 
 branding:
@@ -8,7 +8,7 @@ branding:
 
 inputs:
   mode:
-    description: "Canary workflow: compare, run, pr-check, baseline-check, plugin-matrix, or plugin-suite."
+    description: "Canary workflow: compare, run, pr-check, baseline-check, mcp-check, plugin-matrix, or plugin-suite."
     required: false
     default: compare
   scenario:
@@ -35,6 +35,14 @@ inputs:
     description: Optional committed baseline JSON path for baseline-check. Defaults to .canary/baselines/<scenario-name>.json.
     required: false
     default: ""
+  mcp-contract:
+    description: MCP contract YAML for mcp-check. Defaults to .canary/mcp/server.mcp.yml.
+    required: false
+    default: ""
+  mcp-require-baseline:
+    description: Require a committed MCP baseline when mode=mcp-check.
+    required: false
+    default: "true"
   comment-pr:
     description: "Best-effort update of one stable Canary PR comment for pr-check. Requires pull-requests: write."
     required: false
@@ -141,6 +149,8 @@ runs:
         CANARY_BASE_REF: ${{ inputs.base-ref }}
         CANARY_HEAD_REF: ${{ inputs.head-ref }}
         CANARY_BASELINE: ${{ inputs.baseline }}
+        CANARY_MCP_CONTRACT: ${{ inputs.mcp-contract }}
+        CANARY_MCP_REQUIRE_BASELINE: ${{ inputs.mcp-require-baseline }}
         CANARY_PLUGIN: ${{ inputs.plugin }}
         CANARY_SUITE: ${{ inputs.suite }}
         CANARY_VERSIONS: ${{ inputs.versions }}

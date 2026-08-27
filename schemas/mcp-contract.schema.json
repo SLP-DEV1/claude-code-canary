@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/mcp-contract.schema.json",
+  "title": "Claude Code Canary MCP Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "server"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "transport": {
+          "const": "stdio",
+          "default": "stdio"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30
+        },
+        "protocol_version": {
+          "type": "string",
+          "minLength": 1,
+          "default": "2025-11-25"
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "$ref": "#/$defs/toolExpectations"
+        },
+        "prompts": {
+          "$ref": "#/$defs/nameExpectations"
+        },
+        "resources": {
+          "$ref": "#/$defs/nameExpectations"
+        },
+        "resource_templates": {
+          "$ref": "#/$defs/nameExpectations"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tools_list_changed": {
+              "type": "boolean"
+            },
+            "prompts_list_changed": {
+              "type": "boolean"
+            },
+            "resources_list_changed": {
+              "type": "boolean"
+            },
+            "resources_subscribe": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nameExpectations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "exact": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "toolExpectations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "exact": {
+          "type": "boolean",
+          "default": false
+        },
+        "require_read_only": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "deny_destructive": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  }
+}

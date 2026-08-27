@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 
-const MODES = new Set(['compare', 'run', 'pr-check', 'baseline-check', 'plugin-matrix', 'plugin-suite']);
+const MODES = new Set(['compare', 'run', 'pr-check', 'baseline-check', 'mcp-check', 'plugin-matrix', 'plugin-suite']);
 const SUMMARY_LIMIT = 60_000;
 
 function env(name, fallback = '') {
@@ -63,6 +63,12 @@ export function buildCliArgs(config) {
     case 'baseline-check': {
       const args = ['baseline', 'check', config.scenario || '.canary/basic.canary.yml'];
       if (config.baseline) args.push('--baseline', config.baseline);
+      return args;
+    }
+    case 'mcp-check': {
+      const args = ['mcp-check', config.mcpContract || '.canary/mcp/server.mcp.yml'];
+      if (config.baseline) args.push('--baseline', config.baseline);
+      if (config.mcpRequireBaseline) args.push('--require-baseline');
       return args;
     }
     case 'plugin-matrix': {
@@ -169,6 +175,8 @@ export function readConfig() {
     baseRef: env('CANARY_BASE_REF'),
     headRef: env('CANARY_HEAD_REF'),
     baseline: env('CANARY_BASELINE'),
+    mcpContract: env('CANARY_MCP_CONTRACT'),
+    mcpRequireBaseline: parseBoolean(env('CANARY_MCP_REQUIRE_BASELINE', 'true'), 'mcp-require-baseline'),
     plugin: env('CANARY_PLUGIN'),
     suite: env('CANARY_SUITE'),
     versions: parseVersions(env('CANARY_VERSIONS')),
