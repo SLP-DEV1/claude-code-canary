@@ -151,6 +151,27 @@ describe('plugin compatibility suites', () => {
   });
 
 
+  it('accepts pre-extended discovery metadata when the live plugin has no new surfaces', async () => {
+    const root = await tempRoot();
+    const suite = path.join(root, 'suite');
+    await mkdir(suite, { recursive: true });
+    const live = discovery(root);
+    const legacy = {
+      schemaVersion: 1,
+      pluginName: live.pluginName,
+      pluginRoot: '../plugin',
+      manifestPath: live.manifestPath,
+      commands: live.commands,
+      agents: live.agents,
+      skills: live.skills,
+      hooks: live.hooks,
+      mcpServers: live.mcpServers,
+      warnings: [],
+    };
+    await writeFile(path.join(suite, 'discovery.json'), `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
+    await expect(assertGeneratedPluginSuiteFresh(suite, live)).resolves.toBeUndefined();
+  });
+
   it('marks generated suites stale when extended static surfaces change', async () => {
     const root = await tempRoot();
     const suite = path.join(root, 'suite');

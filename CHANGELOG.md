@@ -6,6 +6,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ### Added
 
+- Plugin discovery and compatibility suites now understand Claude Code LSP servers, background monitors, and plugin dependency declarations. LSPs get generated release smoke scenarios; monitors and dependency constraints are tracked as static, side-effect-free compatibility surfaces.
+- Extended plugin discovery is exported through the public TypeScript API.
 - add protocol-native stdio MCP contract snapshots and checks for tools, JSON schemas, prompts, resources, resource templates and capabilities
 - add `mcp-snapshot`, `mcp-check` and `mcp-compare` with paginated discovery, fingerprinted baselines, tool-safety annotation assertions and breaking/non-breaking contract reports
 

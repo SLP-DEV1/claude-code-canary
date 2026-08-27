@@ -58,6 +58,10 @@ interface PluginManifest extends Record<string, unknown> {
   agents?: unknown;
   hooks?: unknown;
   mcpServers?: unknown;
+  lspServers?: unknown;
+  dependencies?: unknown;
+  monitors?: unknown;
+  experimental?: unknown;
 }
 
 function normalize(value: string): string {
@@ -490,6 +494,7 @@ export async function generatePluginScenarios(pluginPath: string, options: Plugi
     `Run one scenario against recent Claude Code releases:\n\n` +
     `\`\`\`bash\nclaude-canary plugin-matrix ${normalize(path.relative(cwd, loadPath))} --plugin ${normalize(path.relative(cwd, discovery.pluginRoot) || '.')} --last 10\n\`\`\`\n\n` +
     `Generated scenarios: **${scenarios.length}**\n\n` +
+    `Static compatibility surfaces: **${discovery.monitors.length} monitor(s)**, **${discovery.dependencies.length} plugin dependency declaration(s)**. Monitors are discovered and validated but never started by Canary; dependency declarations are tracked as static contracts.\n\n` +
     scenarios.map((scenario) => `- \`${scenario.path}\`${scenario.component ? ` — ${scenario.kind}: ${scenario.component}` : ' — plugin load'}`).join('\n') + '\n';
   await writeFile(path.join(outputDir, 'README.md'), readme, 'utf8');
 
