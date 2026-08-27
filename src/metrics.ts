@@ -1,4 +1,4 @@
-import type { RunMetrics } from './types.js';
+import type { PermissionRequestTrace, RunMetrics } from './types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -8,9 +8,16 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function parseStreamMetrics(stdout: string): RunMetrics {
   const toolIds = new Set<string>();
   const hookEvents = new Set<string>();
+  const hookEventSequence: string[] = [];
+  const permissionRequests: PermissionRequestTrace[] = [];
+  let permissionDenied = 0;
   let parseErrors = 0;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -28,10 +35,30 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
 
     if (value.type === 'tool_use' && typeof value.id === 'string') toolIds.add(value.id);
 
+    // Claude Code documents hook_event_name as the lifecycle event identifier in
+    // --include-hook-events stream-json output. Preserve that field in encounter
+    // order instead of deriving order from the aggregate Set below.
+    const lifecycleEvent = stringValue(value.hook_event_name);
+    if (lifecycleEvent) {
+      hookEvents.add(lifecycleEvent);
+      hookEventSequence.push(lifecycleEvent);
+
+      if (lifecycleEvent === 'PermissionRequest') {
+        permissionRequests.push({
+          toolName: stringValue(value.tool_name),
+          toolUseId: stringValue(value.tool_use_id),
+          permissionMode: stringValue(value.permission_mode),
+        });
+      } else if (lifecycleEvent === 'PermissionDenied') {
+        permissionDenied += 1;
+      }
+    }
+
+    // Retain the existing broad aggregate hook metric for backward compatibility.
     if (typeof value.type === 'string' && value.type.toLowerCase().includes('hook')) {
       hookEvents.add(value.type);
     }
-    for (const key of ['hook_event_name', 'hook_name', 'hookEventName']) {
+    for (const key of ['hook_name', 'hookEventName']) {
       if (typeof value[key] === 'string') hookEvents.add(value[key] as string);
     }
 
@@ -75,6 +102,10 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
     costUsd,
     turns,
     hookEvents: [...hookEvents].sort(),
+    hookEventSequence,
+    permissionPrompts: permissionRequests.length,
+    permissionDenied,
+    permissionRequests,
     parseErrors,
   };
 }
