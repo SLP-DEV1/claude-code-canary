@@ -3,6 +3,8 @@ import process from 'node:process';
 
 export const COMMENT_MARKER = '<!-- claude-code-canary-pr-check -->';
 const COMMENT_LIMIT = 65_000;
+const COMMENTS_PER_PAGE = 100;
+const MAX_COMMENT_PAGES = 10;
 
 export function pullRequestNumberFromEvent(event) {
   const value = event?.pull_request?.number ?? event?.issue?.number ?? event?.number;
@@ -16,10 +18,17 @@ export function buildCommentBody(report, runUrl = '') {
   return `${body.slice(0, COMMENT_LIMIT - 160)}\n\n_Report truncated in PR comment. Open the workflow run/artifact for the complete report._${footer}\n`;
 }
 
+function isBotComment(comment) {
+  const login = typeof comment?.user?.login === 'string' ? comment.user.login : '';
+  return comment?.user?.type === 'Bot' || /\[bot\]$/i.test(login);
+}
+
 export function findExistingCanaryComment(comments) {
-  return Array.isArray(comments)
-    ? comments.find((comment) => typeof comment?.body === 'string' && comment.body.includes(COMMENT_MARKER))
-    : undefined;
+  if (!Array.isArray(comments)) return undefined;
+  return comments.find((comment) =>
+    isBotComment(comment)
+    && typeof comment?.body === 'string'
+    && comment.body.includes(COMMENT_MARKER));
 }
 
 async function githubRequest(url, token, options = {}) {
@@ -34,14 +43,25 @@ async function githubRequest(url, token, options = {}) {
     },
   });
   const text = await response.text();
-  const body = text ? JSON.parse(text) : undefined;
+  let body;
+  try { body = text ? JSON.parse(text) : undefined; } catch { body = text; }
   if (!response.ok) {
-    const message = body?.message ?? `${response.status} ${response.statusText}`;
+    const message = body && typeof body === 'object' && 'message' in body ? body.message : `${response.status} ${response.statusText}`;
     const error = new Error(`GitHub API ${response.status}: ${message}`);
     error.status = response.status;
     throw error;
   }
   return body;
+}
+
+async function findExistingComment(commentsUrl, token) {
+  for (let page = 1; page <= MAX_COMMENT_PAGES; page += 1) {
+    const comments = await githubRequest(`${commentsUrl}?per_page=${COMMENTS_PER_PAGE}&page=${page}`, token);
+    const existing = findExistingCanaryComment(comments);
+    if (existing) return existing;
+    if (!Array.isArray(comments) || comments.length < COMMENTS_PER_PAGE) return undefined;
+  }
+  return undefined;
 }
 
 async function main() {
@@ -57,7 +77,7 @@ async function main() {
     try { event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8')); } catch { event = {}; }
   }
   const explicit = Number(process.env.CANARY_PR_NUMBER || 0);
-  const prNumber = explicit > 0 ? explicit : pullRequestNumberFromEvent(event);
+  const prNumber = Number.isInteger(explicit) && explicit > 0 ? explicit : pullRequestNumberFromEvent(event);
   if (!prNumber) throw new Error('No pull request number is available for comment-pr.');
 
   const report = await readFile(reportPath, 'utf8');
@@ -69,8 +89,7 @@ async function main() {
   const commentsUrl = `${apiBase}/repos/${repository}/issues/${prNumber}/comments`;
 
   try {
-    const comments = await githubRequest(`${commentsUrl}?per_page=100`, token);
-    const existing = findExistingCanaryComment(comments);
+    const existing = await findExistingComment(commentsUrl, token);
     if (existing?.id) {
       await githubRequest(`${apiBase}/repos/${repository}/issues/comments/${existing.id}`, token, {
         method: 'PATCH',
