@@ -63,7 +63,7 @@ describe('Claude invocation arguments', () => {
     ]);
   });
 
-  it('automatically enables lifecycle events when semantic assertions need them', () => {
+  it('enables hook lifecycle streaming only when hook semantics need it', () => {
     const permissionScenario = parseScenario({
       version: 1,
       name: 'permission-semantics',
@@ -77,7 +77,7 @@ describe('Claude invocation arguments', () => {
       regressions: { require_same_hook_sequence: true },
     });
 
-    expect(buildClaudeArgs(permissionScenario)).toContain('--include-hook-events');
+    expect(buildClaudeArgs(permissionScenario)).not.toContain('--include-hook-events');
     expect(buildClaudeArgs(hookScenario)).toContain('--include-hook-events');
   });
 });
