@@ -11,6 +11,7 @@ describe('v1 programmatic API', () => {
       'runScenario',
       'formatRun',
       'formatComparison',
+      'evaluateComparisonRegressions',
       'bisectCommands',
       'bisectReleases',
       'runExperiment',
