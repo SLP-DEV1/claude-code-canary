@@ -15,6 +15,12 @@ export interface CommandSummary {
   timedOut: boolean;
 }
 
+export interface PermissionRequestTrace {
+  toolName?: string;
+  toolUseId?: string;
+  permissionMode?: string;
+}
+
 export interface RunMetrics {
   toolCalls: number;
   inputTokens: number;
@@ -24,7 +30,13 @@ export interface RunMetrics {
   totalTokens: number;
   costUsd?: number;
   turns?: number;
+  /** Unique hook/lifecycle names retained for the v1 aggregate metric contract. */
   hookEvents: string[];
+  /** Ordered lifecycle events exactly as observed from --include-hook-events. */
+  hookEventSequence: string[];
+  permissionPrompts: number;
+  permissionDenied: number;
+  permissionRequests: PermissionRequestTrace[];
   parseErrors: number;
 }
 
