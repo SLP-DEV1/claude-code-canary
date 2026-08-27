@@ -21,6 +21,14 @@ export interface PermissionRequestTrace {
   permissionMode?: string;
 }
 
+export interface PermissionPolicyCoverage {
+  usedTools: string[];
+  promptedTools: string[];
+  autoAllowedTools: string[];
+  deniedCount: number;
+  neverExercised: string[];
+}
+
 export interface RunMetrics {
   toolCalls: number;
   /** Unique tool names observed from stream-json tool_use events. Inputs are intentionally not retained. */
@@ -42,6 +50,8 @@ export interface RunMetrics {
   permissionDenied?: number;
   /** PermissionRequest details. Optional so older v1 artifacts/consumers remain source-compatible. */
   permissionRequests?: PermissionRequestTrace[];
+  /** Privacy-safe policy coverage: tool names and policy pattern coverage only, never tool inputs. */
+  policyCoverage?: PermissionPolicyCoverage;
   parseErrors: number;
 }
 
