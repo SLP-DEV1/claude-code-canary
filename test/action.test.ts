@@ -40,7 +40,7 @@ describe('Claude Canary GitHub Action', () => {
     const source = await readFile(new URL('../package.json', import.meta.url), 'utf8');
     const pkg = JSON.parse(source) as { bin?: Record<string, string>; version?: string };
 
-    expect(pkg.bin).toEqual({ 'claude-canary': './dist/index.js' });
+    expect(pkg.bin).toEqual({ 'claude-canary': 'dist/index.js' });
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   });
 });
