@@ -36,7 +36,7 @@ inputs:
     required: false
     default: ""
   comment-pr:
-    description: Best-effort update of one stable Canary PR comment for pr-check. Requires pull-requests: write.
+    description: "Best-effort update of one stable Canary PR comment for pr-check. Requires pull-requests: write."
     required: false
     default: "false"
   plugin:
