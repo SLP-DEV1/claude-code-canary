@@ -7,33 +7,33 @@ This guide covers the public distribution surfaces for Claude Code Canary: npm, 
 | Surface | Status | Canonical identity |
 | --- | --- | --- |
 | Source | Live | `SLP-DEV1/claude-code-canary` |
-| GitHub Action | `@v1` is live and consumer-tested; Marketplace publication still requires the GitHub release UI | `SLP-DEV1/claude-code-canary@v1` |
+| GitHub Action | `@v1` is live, consumer-tested and published in GitHub Marketplace | `SLP-DEV1/claude-code-canary@v1` |
 | npm | Live; the release workflow verifies registry visibility and the consumer smoke installs the published package from a clean project | `claude-code-canary` |
 | GitHub Release | Automated by `.github/workflows/release.yml` after release gates pass | immutable `vX.Y.Z` plus floating `v1` Action tag |
 | Awesome Claude Code (`erkcet`) | Submitted; issue #20 remains open | resource suggestion #20 |
 
-The npm install and `@v1` Action usage shown in the README are public, tested distribution paths. Do not claim a GitHub Marketplace listing until that separate UI publication is actually live.
+The npm install, `@v1` Action usage and GitHub Marketplace listing are public distribution paths. The npm package and floating Action tag are independently consumer-tested after publication.
 
 ## GitHub Marketplace
 
 The root `action.yml` is the Marketplace metadata source. Keep it limited to one root Action and preserve:
 
 - a unique, descriptive `name`;
-- a short search-friendly `description`;
+- a short search-friendly `description` under GitHub Marketplace's 125-character limit;
 - documented inputs and outputs;
 - `branding.icon` and `branding.color`;
 - a public repository and tagged release.
 
-Recommended listing identity:
+Published listing identity:
 
 - **Name:** Claude Code Canary
 - **Primary category:** Continuous integration
 - **Secondary category:** Testing
 - **One-line positioning:** Deterministic regression tests and compatibility matrices across Claude Code releases, plugins and configs.
 
-Marketplace publication is an account/UI operation. From the root `action.yml`, use GitHub's Marketplace publication banner to draft or edit the release, enable **Publish this Action to the GitHub Marketplace**, resolve any validation warnings, select the categories, accept the Marketplace Developer Agreement if required, complete 2FA, and publish/update the release.
+The Marketplace listing is live. Repository issue #49 tracked the one-time account/UI publication step and is closed. Future releases should keep the root `action.yml` metadata Marketplace-valid and preserve the stable `@v1` consumer path.
 
-The normal release automation can still create ordinary GitHub Releases and move the floating `v1` tag, but the Marketplace opt-in itself must be completed in GitHub's release UI. Repository issue #49 tracks this one remaining distribution step.
+The normal release automation creates GitHub Releases and moves the floating `v1` tag only after its release gates pass. Marketplace publication status should still be checked after metadata or release changes because GitHub validates the tagged Action metadata independently.
 
 ## npm
 
@@ -121,9 +121,9 @@ Do **not** submit yet. Its current rules require a resource to be at least 14 da
 
 ## Repository discovery metadata
 
-Keep the GitHub repository description focused on the problem rather than marketing language. Repository issue #53 tracks the UI-only metadata/settings changes that the GitHub connector cannot write.
+The GitHub repository description and discovery topics are configured for Claude Code regression/compatibility testing, plugins, MCP, CI and developer tooling. Repository issue #53 now tracks only the remaining UI-only merge/repository settings that the GitHub connector cannot write.
 
-Recommended topics include:
+Current discovery topics:
 
 ```text
 claude-code
@@ -155,5 +155,5 @@ After each public release, verify all of these before announcing it:
 3. `@v1` resolves to the intended compatible release.
 4. The npm version is visible and provenance is shown when published through Trusted Publishing.
 5. The consumer smoke succeeds against both the published npm package and the floating `@v1` Action from clean workspaces.
-6. Marketplace status is checked separately; do not infer it merely from the existence of a GitHub Release.
+6. The GitHub Marketplace listing remains visible and the Action metadata passes Marketplace validation.
 7. README badges and displayed version numbers match the package/release version.
