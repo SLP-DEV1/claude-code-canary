@@ -2,6 +2,7 @@
   "name": "claude-code-canary",
   "version": "1.0.1",
   "description": "Deterministic regression testing, release bisection and plugin compatibility matrices for Claude Code",
+  "author": "SLP-DEV1",
   "type": "module",
   "main": "./dist/api.js",
   "types": "./dist/api.d.ts",
@@ -33,14 +34,20 @@
   },
   "keywords": [
     "claude-code",
+    "claude-code-plugin",
     "anthropic",
     "regression-testing",
     "compatibility-testing",
+    "release-testing",
     "version-bisect",
     "github-actions",
+    "continuous-integration",
+    "developer-tools",
     "plugins",
     "mcp",
+    "mcp-server",
     "agent-evals",
+    "ai-agent-testing",
     "ai-coding",
     "cli"
   ],
@@ -58,7 +65,8 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
     "commander": "14.0.3",
