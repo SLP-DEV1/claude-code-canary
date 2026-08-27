@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Scenario } from './config.js';
@@ -89,6 +89,23 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
+async function assertVariantTreeSafe(root: string): Promise<void> {
+  const rootInfo = await lstat(root);
+  if (rootInfo.isSymbolicLink()) throw new Error(`Configuration variant must not be a symbolic link: ${root}`);
+  if (!rootInfo.isDirectory()) throw new Error(`Configuration variant is not a directory: ${root}`);
+
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Configuration variant contains a symbolic link, which is refused for isolation: ${full}`);
+      }
+      if (entry.isDirectory()) await walk(full);
+    }
+  };
+  await walk(root);
+}
+
 async function listFilesRecursively(root: string, relativeRoot: string): Promise<string[]> {
   const absolute = path.join(root, relativeRoot);
   if (!(await exists(absolute))) return [];
@@ -145,13 +162,12 @@ export function assertExperimentCompatibleScenario(scenario: Scenario): void {
 
 export async function validateConfigVariant(variantRoot: string): Promise<void> {
   const resolved = path.resolve(variantRoot);
-  let info;
   try {
-    info = await stat(resolved);
-  } catch {
-    throw new Error(`Configuration variant does not exist: ${variantRoot}`);
+    await assertVariantTreeSafe(resolved);
+  } catch (error) {
+    if (error instanceof Error && /symbolic link|not a directory/i.test(error.message)) throw error;
+    throw new Error(`Configuration variant does not exist or cannot be inspected: ${variantRoot}`);
   }
-  if (!info.isDirectory()) throw new Error(`Configuration variant is not a directory: ${variantRoot}`);
 
   await validateJsonIfPresent(path.join(resolved, '.claude', 'settings.json'), '.claude/settings.json');
   await validateJsonIfPresent(path.join(resolved, '.claude', 'settings.local.json'), '.claude/settings.local.json');

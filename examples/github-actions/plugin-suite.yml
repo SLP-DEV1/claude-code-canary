@@ -1,4 +1,4 @@
-name: Claude Canary — release compare
+name: Claude Canary — plugin compatibility
 
 on:
   workflow_dispatch:
@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  regression-check:
+  plugin-compatibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -21,11 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compare Claude Code releases
+      - name: Test plugin across recent Claude Code releases
         uses: SLP-DEV1/claude-code-canary@v1
         with:
-          mode: compare
-          scenario: .canary/basic.canary.yml
-          from: 2.1.220
-          to: latest
-          upload-results: "true"
+          mode: plugin-suite
+          plugin: ./my-plugin
+          last: 10
+          max-runs: 200
+          fail-on-incompatible: "true"

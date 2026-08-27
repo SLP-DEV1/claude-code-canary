@@ -65,4 +65,21 @@ describe('deterministic expectations', () => {
       expect.stringMatching(/contains forbidden text.*Unknown command/),
     ]));
   });
+
+  it('fails closed when a configured cost limit cannot be measured', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'canary-eval-'));
+    const scenario = parseScenario({
+      version: 1,
+      name: 'cost-check',
+      prompt: 'x',
+      limits: { max_cost_usd: 0.10 },
+    });
+
+    const missing = await evaluateExpectations(scenario, dir, [], metrics);
+    expect(missing).toEqual([expect.stringMatching(/did not report total_cost_usd/i)]);
+
+    const measured = { ...metrics, costUsd: 0.11 };
+    const exceeded = await evaluateExpectations(scenario, dir, [], measured);
+    expect(exceeded).toEqual([expect.stringMatching(/Cost limit exceeded/)]);
+  });
 });

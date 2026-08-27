@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Claude Code Canary</title>
+  <desc id="desc">Regression testing and compatibility intelligence for Claude Code.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090b10"/>
+      <stop offset="1" stop-color="#171b24"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f7c948" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#f7c948" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f7c948" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="1015" cy="92" r="125" fill="#f7c948" opacity="0.07" filter="url(#shadow)"/>
+  <path d="M42 280 H230 L258 232 L292 310 L330 252 L356 280 H505 L532 263 L555 280 H1158" fill="none" stroke="url(#glow)" stroke-width="3"/>
+  <g transform="translate(934 70)">
+    <circle cx="86" cy="86" r="70" fill="#f7c948"/>
+    <path d="M52 84c18-35 69-42 98-12-18-4-33 1-44 13 18 2 32 10 43 24-20 19-54 27-78 15-21-11-28-24-19-40z" fill="#11151d"/>
+    <circle cx="115" cy="72" r="5" fill="#f7c948"/>
+    <path d="M151 77l27 10-29 10z" fill="#f7c948"/>
+    <path d="M63 121l-13 35 35-28M94 129l7 35 24-33" fill="none" stroke="#11151d" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <text x="64" y="105" fill="#f7c948" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700" letter-spacing="3">CLAUDE CODE CANARY</text>
+  <text x="64" y="172" fill="#ffffff" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="48" font-weight="750">Know what broke.</text>
+  <text x="64" y="224" fill="#ffffff" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="48" font-weight="750">Know where it started.</text>
+  <text x="64" y="326" fill="#a9b0bd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17">compare  •  bisect  •  plugins  •  record/replay  •  repro</text>
+</svg>

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/run-result.schema.json",
+  "title": "Claude Code Canary Run Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "scenario",
+    "executable",
+    "passed",
+    "failures",
+    "claudeExitCode",
+    "claudeTimedOut",
+    "durationMs",
+    "changedFiles",
+    "setup",
+    "verification",
+    "metrics",
+    "createdAt",
+    "gitCommit"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "scenario": { "type": "string", "minLength": 1 },
+    "executable": { "type": "string", "minLength": 1 },
+    "passed": { "type": "boolean" },
+    "failures": { "type": "array", "items": { "type": "string" } },
+    "claudeExitCode": { "type": "integer" },
+    "claudeTimedOut": { "type": "boolean" },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "changedFiles": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "setup": { "$ref": "#/$defs/commandSummaries" },
+    "verification": { "$ref": "#/$defs/commandSummaries" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "gitCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "artifactPath": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "commandSummaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "code", "durationMs", "timedOut"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "code": { "type": "integer" },
+          "durationMs": { "type": "integer", "minimum": 0 },
+          "timedOut": { "type": "boolean" }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toolCalls",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheCreationTokens",
+        "totalTokens",
+        "hookEvents",
+        "parseErrors"
+      ],
+      "properties": {
+        "toolCalls": { "type": "integer", "minimum": 0 },
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "cacheReadTokens": { "type": "integer", "minimum": 0 },
+        "cacheCreationTokens": { "type": "integer", "minimum": 0 },
+        "totalTokens": { "type": "integer", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "turns": { "type": "number", "minimum": 0 },
+        "hookEvents": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "parseErrors": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

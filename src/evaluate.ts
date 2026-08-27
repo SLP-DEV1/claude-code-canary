@@ -75,8 +75,12 @@ export async function evaluateExpectations(
   if (scenario.limits?.max_total_tokens !== undefined && metrics.totalTokens > scenario.limits.max_total_tokens) {
     failures.push(`Token limit exceeded: ${metrics.totalTokens} > ${scenario.limits.max_total_tokens}`);
   }
-  if (scenario.limits?.max_cost_usd !== undefined && metrics.costUsd !== undefined && metrics.costUsd > scenario.limits.max_cost_usd) {
-    failures.push(`Cost limit exceeded: $${metrics.costUsd.toFixed(4)} > $${scenario.limits.max_cost_usd.toFixed(4)}`);
+  if (scenario.limits?.max_cost_usd !== undefined) {
+    if (metrics.costUsd === undefined) {
+      failures.push('Cost limit is configured but Claude did not report total_cost_usd; refusing to pass an unmeasured cost constraint.');
+    } else if (metrics.costUsd > scenario.limits.max_cost_usd) {
+      failures.push(`Cost limit exceeded: $${metrics.costUsd.toFixed(4)} > $${scenario.limits.max_cost_usd.toFixed(4)}`);
+    }
   }
 
   return failures;

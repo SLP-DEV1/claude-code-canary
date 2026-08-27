@@ -1,289 +1,196 @@
+<p align="center">
+  <img src="assets/hero.svg" alt="Claude Code Canary — Know what broke. Know where it started." width="100%" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml/badge.svg"></a>
+  <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white">
+  <img alt="v1.0.0" src="https://img.shields.io/badge/Claude%20Canary-v1.0.0-f7c948">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
+
 # Claude Code Canary
 
-[![CI](https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg)](https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml)
-[![Claude Canary Action](https://img.shields.io/badge/GitHub%20Action-Claude%20Canary-yellow?logo=githubactions)](docs/GITHUB_ACTION.md)
+**Deterministic regression testing and compatibility intelligence for Claude Code.**
 
-**Catch Claude Code regressions before they catch you.**
+Claude Code changes. Your `CLAUDE.md`, hooks, plugins, MCP servers and permission rules change too. Canary gives you a repeatable answer to the question that normally becomes guesswork:
 
-Claude Code Canary is an open-source regression harness for Claude Code. It runs the same coding scenario in isolated Git worktrees, records deterministic outcomes and agent metrics, and compares Claude Code versions/configurations side by side.
+> **What broke, and which Claude Code release first broke it?**
 
-> Status: **pre-1.0 development**. The core workflows are usable, but interfaces may still change before the stable scenario/reporting API.
+Canary runs the same scenario from the same Git commit in disposable worktrees, captures tool/token/cost/duration metrics, checks deterministic assertions, compares releases, bisects regressions and builds full plugin compatibility matrices.
 
-## Why Canary?
+## The 30-second demo
 
-Claude Code changes quickly. So do your `CLAUDE.md`, hooks, plugins, MCP servers, skills and permission rules. When behavior changes, it is hard to answer:
-
-- Did the Claude Code update cause the regression?
-- Is the new `CLAUDE.md` actually better?
-- Did a hook stop firing?
-- Did token/tool usage jump?
-- Which version first became bad?
-
-Canary turns those questions into repeatable tests.
-
-## What works now
-
-- `claude-canary init` — create a scenario file
-- `claude-canary validate` — validate YAML before spending tokens
-- `claude-canary record` / `save` — turn one real Claude task into a reviewable regression scenario
-- `claude-canary replay` — replay a recorded scenario from its exact original Git commit
-- `claude-canary repro` — export a failed run as a privacy-first, reviewable bug-reproduction bundle
-- `claude-canary run` — run one scenario in a disposable Git worktree
-- `claude-canary compare` — compare two executables **or two release versions**
-- `claude-canary experiment` — A/B test `CLAUDE.md`, settings, hooks, plugins and MCP configuration with repeated trials
-- `claude-canary plugin-init` — discover a plugin and generate load/command/agent/skill/hook/MCP smoke scenarios automatically
-- `claude-canary plugin-matrix` — test one plugin across recent or explicitly selected Claude Code releases and emit JSON + Markdown compatibility tables
-- `claude-canary bisect --good <version> --bad <version>` — automatically find the first bad published Claude Code release
-- `claude-canary bisect --commands ...` — binary-search custom Claude executables/wrappers
-- `claude-canary versions install|list|path` — isolated historical Claude Code cache
-- signed-manifest authentication for Claude Code 2.1.89+
-- `claude-canary doctor` — check Git, Claude and repository readiness
-- reusable **Claude Canary GitHub Action** with Step Summary and JSON artifact upload
-- deterministic verification commands
-- changed-file allow / require / deny rules
-- expected/forbidden file and content assertions
-- max tool-call / token / cost limits
-- `stream-json` capture with tool-use and usage metrics
-- JSON result artifacts for CI and later analysis
-
-## Quick start
-
-Requirements:
-
-- Node.js 20+
-- Git
-- Claude Code authenticated (your normal installation can remain untouched)
-
-```bash
-npm install
-npm run build
-npm link
-
-cd /path/to/project
-claude-canary init
-claude-canary run .canary/basic.canary.yml
-```
-
-Canary deliberately uses Claude Code's documented non-interactive CLI (`claude -p`) and `stream-json` output instead of scraping the interactive terminal UI.
-
-## Record a real Claude Code task
-
-Start from a completely clean repository and tell Canary what task you are about to perform:
-
-```bash
-claude-canary record auth-fix \
-  --prompt "Fix the failing authentication test without changing the public API" \
-  --setup "npm ci" \
-  --verify "npm test"
-```
-
-Then use Claude Code normally. When the result is good, save it **before committing or changing branches**:
-
-```bash
-claude-canary save auth-fix
-```
-
-Canary learns the changed-file set and generates a reviewable scenario under `.canary/`. Pending recording state lives under `.git/cc-canary/recordings/`, so the recorder itself never pollutes the Git diff.
-
-Replay the task later from the exact original starting commit:
-
-```bash
-claude-canary replay .canary/auth-fix.canary.yml
-```
-
-Recorded scenarios include allow **and require** changed-file assertions, created/deleted-file expectations, the original commit and non-secret Claude/config metadata. Canary does not persist raw environment values or Claude session transcripts. Common credential patterns and absolute machine paths are redacted from stored prompts; setup/verification commands that appear secret-bearing or machine-specific are rejected rather than silently persisted.
-
-The generated assertions are intentionally editable candidates, not a claim that the diff alone proves semantic correctness. Add or strengthen deterministic verification commands and content assertions after recording when useful.
-
-See [`docs/RECORD_REPLAY.md`](docs/RECORD_REPLAY.md) for the full workflow, privacy model and current limitations.
-
-## Export a failed run as a bug reproduction
-
-After a Canary run fails, turn its result artifact into a compact reproduction directory:
-
-```bash
-claude-canary repro .canary/results/failed.json
-```
-
-Canary resolves the exact recorded/base Git commit and creates a bundle similar to:
-
-```text
-.canary/repro/auth-fix-01234567/
-├── README.md
-├── scenario.canary.yml
-├── result.json
-├── environment.json
-├── fixture-manifest.json
-├── issue-report.md
-├── reproduce.sh
-├── reproduce.ps1
-└── fixture/
-```
-
-The fixture is derived from deterministic scenario scope instead of copying the whole repository. Canary excludes known credential files, dependency/build/cache directories, symlinks and binaries; exported text is scanned for common secret shapes and machine-specific absolute paths. Raw model transcripts and environment-variable values are not included.
-
-The generated `issue-report.md` summarizes deterministic failures, versions, changed files and one-command reproduction steps. `reproduce.sh` and `reproduce.ps1` create a local Git baseline in the fixture and run the bundled Canary scenario.
-
-`--force` is intentionally conservative: Canary only replaces an existing directory when it carries Canary's repro-bundle marker. It will not recursively delete an arbitrary user directory that merely matches `--output`.
-
-**Always inspect the complete generated bundle before publishing it.** Generic redaction cannot know which project-specific source code, customer names or business logic are confidential.
-
-See [`docs/REPRO_BUNDLES.md`](docs/REPRO_BUNDLES.md) for the fixture-selection rules, exclusions, threat model and publishing checklist.
-
-## Generate plugin smoke tests automatically
-
-Point Canary at a Claude Code plugin and it can turn the plugin surface into a reviewable smoke suite:
+Plugin author? Turn your plugin surface into smoke tests, then test every generated scenario across recent Claude Code releases:
 
 ```bash
 claude-canary plugin-init ./my-plugin
+claude-canary plugin-suite --plugin ./my-plugin --last 10
 ```
 
-Canary reads `.claude-plugin/plugin.json`, follows both the standard plugin folders and manifest custom paths, and discovers commands, agents, skills, hooks and MCP servers. Inline hook/MCP definitions are supported too, and command/agent/skill frontmatter is used to produce more targeted smoke prompts.
-
-The default output looks like:
+You get one report like this:
 
 ```text
-.canary/plugins/my-plugin/
-├── README.md
-├── discovery.json
-├── load.canary.yml
-├── command-review.canary.yml
-├── agent-code-reviewer.canary.yml
-├── skill-api-testing.canary.yml
-├── hook-sessionstart.canary.yml
-└── mcp-github.canary.yml
+| Claude Code | load | command-review | skill-api | hook-stop | mcp-github | Overall |
+|-------------|:----:|:--------------:|:---------:|:---------:|:----------:|---------|
+| 2.1.231     |  ✅  |       ✅       |    ✅     |    ✅     |     ✅     | ✅ Compatible |
+| 2.1.232     |  ✅  |       ✅       |    ✅     |    ❌     |     ✅     | ❌ 1 failed |
+| 2.1.233     |  ✅  |       ❌       |    ✅     |    ❌     |     ✅     | ❌ 2 failed |
 ```
 
-Generated scenarios are read-only by default and deny repository file changes. They are intentionally editable scaffolds: a generator can discover plugin structure deterministically, but plugin-specific command arguments, hook matchers and MCP semantics may still need a tighter human-authored assertion.
-
-After generation, run any scenario through the release matrix:
+Need the exact regression boundary instead?
 
 ```bash
-claude-canary plugin-matrix \
-  .canary/plugins/my-plugin/load.canary.yml \
-  --plugin ./my-plugin \
-  --last 10
+claude-canary bisect .canary/plugin-smoke.canary.yml \
+  --good 2.1.220 \
+  --bad 2.1.237
 ```
 
-Use `--force` to regenerate an existing Canary-created suite. The command only replaces directories carrying Canary's marker and refuses arbitrary recursive deletion. Plugin trees containing symlinks are rejected to match the compatibility matrix's isolation rules.
+## Why Canary is different
 
-See [`docs/PLUGIN_SMOKE_GENERATOR.md`](docs/PLUGIN_SMOKE_GENERATOR.md) for discovery rules, generated files, safety behavior and current limitations.
+| Problem | Canary |
+| --- | --- |
+| "The new Claude release feels worse" | Run the same deterministic scenario on both releases. |
+| "Which release broke us?" | Binary-search the real published Claude Code release range. |
+| "Does this plugin still work?" | Generate smoke tests and run a release × component compatibility suite. |
+| "Is my new `CLAUDE.md` actually better?" | Run interleaved A/B configuration experiments. |
+| "This worked yesterday" | Record a good real task and replay it from the exact original commit. |
+| "How do I report this bug safely?" | Export a bounded, redacted reproduction bundle. |
+| "Did agent usage blow up?" | Track tool calls, tokens, duration and reported cost. |
 
-## Test a plugin across Claude Code releases
-
-Plugin authors can turn compatibility into a repeatable matrix instead of waiting for users to report that an update broke commands, hooks or MCP-backed behavior.
-
-```bash
-claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
-  --plugin ./my-plugin \
-  --last 10
-```
-
-Canary resolves the selected published releases, authenticates/reuses each native Claude Code binary through its version cache, starts every run from the same Git commit, copies the plugin into a fresh temporary runtime directory, and injects that copy with `--plugin-dir`.
-
-Example Markdown output:
-
-```text
-| Claude Code | Result | Tool calls | Tokens | Failure |
-| --- | --- | ---: | ---: | --- |
-| 2.1.231 | ✅ Compatible | 8 | 12430 | |
-| 2.1.232 | ✅ Compatible | 9 | 13102 | |
-| 2.1.233 | ❌ Incompatible | 3 | 4190 | Plugin command was not available |
-```
-
-The matrix writes both JSON and README-friendly Markdown under `.canary/results/` and identifies the earliest incompatible release in the selected set.
-
-You can also select explicit versions or an inclusive published range:
-
-```bash
-claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
-  --plugin ./my-plugin \
-  --versions 2.1.231 2.1.232 2.1.233
-
-claude-canary plugin-matrix .canary/plugin-smoke.canary.yml \
-  --plugin ./my-plugin \
-  --from 2.1.220 \
-  --to 2.1.237
-```
-
-By default any incompatible release makes the command exit non-zero, which turns it into a CI compatibility gate. Use `--allow-incompatible` for documentation-only historical matrices. A copy-ready smoke scenario lives at [`examples/plugin-smoke.canary.yml`](examples/plugin-smoke.canary.yml).
-
-See [`docs/PLUGIN_COMPATIBILITY.md`](docs/PLUGIN_COMPATIBILITY.md) for isolation details, selectors, artifacts and guidance for writing a smoke scenario that actually proves the plugin participated.
+Canary is not another transcript viewer or generic model leaderboard. It is a **regression layer for real Claude Code workflows**.
 
 ## GitHub Action
 
-Run Canary on pull requests and make regressions visible as normal GitHub checks:
+The v1 Action supports `compare`, `run`, `plugin-matrix` and `plugin-suite` through one Marketplace-ready `action.yml`.
+
+A plugin compatibility gate can be as small as:
 
 ```yaml
 name: Claude Canary
 
 on:
-  pull_request:
   workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  regression-check:
+  plugin-compatibility:
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: SLP-DEV1/claude-code-canary@main
+      - uses: SLP-DEV1/claude-code-canary@v1
         with:
-          scenario: .canary/basic.canary.yml
-          from: 2.1.89
-          to: latest
+          mode: plugin-suite
+          plugin: ./my-plugin
+          last: 10
 ```
 
-The Action writes the comparison to the GitHub Actions Step Summary, fails when the candidate fails the scenario, and uploads `.canary/results/*.json` as an artifact.
+The Action streams progress into the job log, writes the combined Markdown report to the GitHub Step Summary and uploads `.canary/results/` as an artifact. Inputs are converted into a direct argument array rather than interpolated into a shell command.
 
-Add a live status badge to the repository that uses Canary:
+> **Security:** do not expose `ANTHROPIC_API_KEY` or other secrets to untrusted fork code/scenarios. Prefer trusted branches, `workflow_dispatch`, or carefully designed PR workflows. See [GitHub Action security](docs/GITHUB_ACTION.md#security).
 
-```md
-[![Claude Canary](https://github.com/OWNER/REPO/actions/workflows/claude-canary.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/claude-canary.yml)
-```
+See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for every input/output and more examples.
 
-See [`docs/GITHUB_ACTION.md`](docs/GITHUB_ACTION.md) for inputs, security notes, a Shields.io badge variant and the full setup. A copy-ready workflow also lives at [`examples/github-actions/claude-canary.yml`](examples/github-actions/claude-canary.yml).
+## CLI quick start
 
-## Compare actual Claude Code releases
+Requirements:
 
-Canary can keep multiple native Claude Code binaries in its own cache. It resolves exact versions or the `stable` / `latest` channels from Anthropic's official release distribution.
+- Node.js 20+
+- Git
+- an authenticated Claude Code installation or API-key environment suitable for headless Claude Code
 
-For Claude Code 2.1.89 and newer, Canary verifies Anthropic's detached release-manifest signature against a hard-pinned signing-key fingerprint **before** trusting the binary checksum. Older releases are clearly marked `checksum-only` because Anthropic did not publish detached manifest signatures for them.
+Until the npm package is published, install the CLI from source:
 
 ```bash
-claude-canary versions install 2.1.89
-claude-canary versions list
+git clone https://github.com/SLP-DEV1/claude-code-canary.git
+cd claude-code-canary
+npm install --ignore-scripts
+npm run build
+npm link
 
+claude-canary --version
+claude-canary doctor
+```
+
+Then create and run a scenario inside the repository you want to test:
+
+```bash
+cd /path/to/project
+claude-canary init
+claude-canary run .canary/basic.canary.yml
+```
+
+## Core workflows
+
+### Compare two Claude Code releases
+
+```bash
 claude-canary compare .canary/basic.canary.yml \
-  --from 2.1.89 \
+  --from 2.1.220 \
   --to latest
 ```
 
-Missing versions are cached automatically. Canary **does not replace or downgrade your normal `claude` installation**.
+Canary keeps historical native binaries in its own cache and never replaces your normal `claude` installation. Release manifests are checksum-verified; signed manifests are signature-verified where Anthropic publishes signatures.
 
-See [`docs/VERSION_MANAGER.md`](docs/VERSION_MANAGER.md) for the cache layout and trust model.
+### Find the first bad release
 
-## A/B test Claude Code configuration
-
-Measure whether a new Claude Code setup actually improves the same deterministic scenario instead of judging it by feel.
-
-Create two variant directories, for example:
-
-```text
-.canary/variants/
-  current/
-    CLAUDE.md
-  candidate/
-    CLAUDE.md
-    .claude/settings.json
-    .mcp.json
+```bash
+claude-canary bisect .canary/basic.canary.yml \
+  --good 2.1.220 \
+  --bad 2.1.237
 ```
 
-Then run repeated, interleaved trials:
+Only the releases needed by binary search are executed. Like `git bisect`, this assumes a monotonic good → bad transition.
+
+### Generate plugin smoke tests
+
+```bash
+claude-canary plugin-init ./my-plugin
+```
+
+Canary discovers standard and manifest-defined plugin surfaces including:
+
+- commands
+- agents
+- skills
+- hooks
+- MCP servers
+
+Generated suites are marker-protected, symlink-safe and intentionally reviewable. They are scaffolds: strengthen assertions for domain-specific behavior before treating them as proof.
+
+### Run the complete plugin suite
+
+```bash
+claude-canary plugin-suite \
+  --plugin ./my-plugin \
+  --last 10
+```
+
+The suite refuses stale discovery metadata and missing generated scenarios so an old or accidentally incomplete suite cannot silently turn green. A default run budget prevents accidental `scenarios × releases` explosions.
+
+### Focus on one plugin contract
+
+```bash
+claude-canary plugin-matrix \
+  .canary/plugins/my-plugin/command-review.canary.yml \
+  --plugin ./my-plugin \
+  --from 2.1.220 \
+  --to 2.1.237
+```
+
+Use `plugin-suite` for the broad gate and `plugin-matrix` for focused debugging.
+
+### A/B test Claude configuration
 
 ```bash
 claude-canary experiment .canary/basic.canary.yml \
@@ -292,40 +199,32 @@ claude-canary experiment .canary/basic.canary.yml \
   --runs 5
 ```
 
-Canary keeps the Git starting state and scenario identical while varying controlled Claude Code configuration. It reports pass rate plus average tool calls, tokens, cost and duration, and writes a machine-readable aggregate artifact without copying variant contents or environment values into it.
+Variants can cover project instructions, settings, rules, hooks, MCP config and local plugins. Canary interleaves baseline/candidate runs and reports pass-rate and efficiency deltas. Variant trees containing symlinks are refused.
 
-Experiment variants can control project `CLAUDE.md` / `CLAUDE.local.md`, project/local settings, rules, hooks, MCP config and local plugins. User configuration and auto memory are excluded from experiment runs where Claude Code provides controls for doing so; managed organization policy remains effective.
-
-Copy-ready example variants live under [`examples/config-experiment/`](examples/config-experiment/). See [`docs/CONFIG_EXPERIMENTS.md`](docs/CONFIG_EXPERIMENTS.md) for the complete variant layout, isolation guarantees and nondeterminism guidance.
-
-## Find the first bad Claude Code release
-
-Give Canary one known-good and one known-bad published release:
+### Record and replay a real successful task
 
 ```bash
-claude-canary bisect .canary/basic.canary.yml \
-  --good 2.1.220 \
-  --bad 2.1.237
+claude-canary record auth-fix \
+  --prompt "Fix the failing authentication test without changing the public API" \
+  --setup "npm ci" \
+  --verify "npm test"
+
+# Run the real Claude task, then:
+claude-canary save auth-fix
+
+# Later:
+claude-canary replay .canary/auth-fix.canary.yml
 ```
 
-Canary reads the real published Claude Code release catalog, respects version-number gaps, authenticates only the releases needed by binary search, runs the same scenario from the same repository state, and reports the first published release that fails.
+The generated scenario records the exact starting Git commit and deterministic changed-file expectations without persisting raw environment values or a Claude transcript.
 
-```text
-Claude Code Canary — release bisect
+### Export a reproduction bundle
 
-PASS  2.1.220
-FAIL  2.1.237
-PASS  2.1.228
-FAIL  2.1.233
-PASS  2.1.231
-FAIL  2.1.232
-
-First bad release: 2.1.232
+```bash
+claude-canary repro .canary/results/failed.json
 ```
 
-It does **not** run every intermediate release. The search is logarithmic, so a range containing dozens of releases typically needs only a handful of actual Claude runs.
-
-Like `git bisect`, release bisection assumes a monotonic transition: the scenario is good before some boundary and bad from that boundary onward. Flaky scenarios or regressions that disappear and later reappear can mislead binary search; stabilize or repeat the scenario before trusting the boundary.
+Repro bundles use bounded fixture selection, deny credential/build/cache paths, refuse symlinks and binaries, redact common secret/path patterns and generate Linux/macOS plus PowerShell launchers. **Review every bundle before publishing it.** Generic redaction cannot understand project-specific confidentiality.
 
 ## Scenario format
 
@@ -343,10 +242,7 @@ setup:
 
 claude:
   executable: claude
-  model: sonnet
   permission_mode: dontAsk
-  max_turns: 20
-  max_budget_usd: 5
   timeout_seconds: 900
 
 verify:
@@ -362,9 +258,6 @@ expect:
       - src/auth/**
     deny:
       - package-lock.json
-  files_exist:
-    - src/auth/index.ts
-  files_absent: []
   file_contains:
     - path: src/auth/index.ts
       text: authenticate
@@ -375,104 +268,99 @@ limits:
   max_cost_usd: 5
 ```
 
-A scenario passes only when Claude exits successfully **and** every deterministic assertion passes.
+A run passes only when Claude exits successfully **and** every configured deterministic assertion/limit can be evaluated and passes. v1 fails closed on malformed/truncated `stream-json` and on cost limits when Claude does not report cost.
 
-## Compare custom Claude builds/wrappers
+## Isolation and trust model
 
-You can still point Canary at any two executables:
+Every ordinary run starts from a clean tracked repository state and executes in a disposable detached Git worktree. Canary separates generated results from the tested worktree and cleans temporary worktrees/runtime copies after execution.
 
-```bash
-claude-canary compare .canary/basic.canary.yml \
-  --baseline /opt/claude/old/claude \
-  --candidate /opt/claude/new/claude
+Additional v1 hardening includes:
+
+- bounded subprocess output capture;
+- fail-closed malformed protocol handling;
+- validated Claude release platform IDs;
+- bounded release downloads plus checksum/signature verification;
+- symlink refusal for plugin suites and configuration variants;
+- marker-protected destructive regeneration/repro operations;
+- exact direct dependency versions;
+- SHA-pinned third-party Actions;
+- CodeQL and cross-platform CI.
+
+Canary scenarios themselves can contain setup/verification shell commands and Claude permission options. Treat scenario/config files as **trusted code**, especially in CI with credentials.
+
+Read [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) and [SECURITY.md](SECURITY.md) before using Canary on untrusted contributions.
+
+## v1 programmatic API
+
+v1 also exposes a supported ESM library entry point:
+
+```js
+import {
+  loadScenario,
+  runScenario,
+  runPluginSuite,
+  formatPluginSuiteMarkdown,
+  CANARY_VERSION,
+} from 'claude-code-canary';
 ```
 
-Example output:
+The public entry point is `dist/api.js` / `dist/api.d.ts`. Internal files are intentionally not package exports. The core run artifact contract is documented by [`schemas/run-result.schema.json`](schemas/run-result.schema.json).
+
+## Commands
 
 ```text
-Claude Code Canary — compare
-
-Metric                 baseline     candidate
-Result                 PASS         FAIL
-Tool calls             42           57
-Total tokens           81,204       103,912
-Cost                   $1.42        $1.91
-Duration               2m 13s       2m 41s
-
-Candidate regression detected.
+init             Create a starter scenario
+validate         Validate scenario YAML without spending tokens
+run              Run one deterministic scenario
+compare          Compare two executables or releases
+bisect           Find the first bad executable/release
+experiment       A/B test Claude Code configuration variants
+record / save    Capture a successful real task as a scenario
+replay           Replay from the recorded starting commit
+repro            Create a privacy-first bug reproduction bundle
+plugin-init      Discover a plugin and generate smoke scenarios
+plugin-matrix    Test one plugin scenario across releases
+plugin-suite     Test the complete generated plugin surface across releases
+versions         Install/list/locate isolated Claude Code releases
+doctor           Check local prerequisites and repository readiness
 ```
 
-## Bisect custom executables
+Run `claude-canary <command> --help` for command-specific flags.
 
-If you have custom Claude wrappers/builds rather than published release numbers:
+## Documentation
 
-```bash
-claude-canary bisect .canary/basic.canary.yml --commands \
-  ./claude-good \
-  ./claude-middle-a \
-  ./claude-middle-b \
-  ./claude-bad
-```
-
-Canary verifies the first command is good and the last is bad, then binary-searches that ordered list.
-
-## Safety model
-
-Canary isolates **files**, not your whole machine. Each run uses a disposable detached Git worktree, but commands executed by Claude or scenario setup/verification still run with your OS account permissions.
-
-For untrusted repositories or aggressive permission settings, run Canary inside a container/VM. Canary defaults to conservative behavior and never enables `bypassPermissions` for you.
-
-The version cache authenticates signed manifests for Claude Code 2.1.89+ with Anthropic's pinned release-signing fingerprint, then verifies binary SHA256 and size. Pre-2.1.89 releases are explicitly reported as checksum-only.
-
-Reproduction bundles add a second publishing-safety boundary: minimal deterministic fixture selection, hard exclusions, bounded text-only copying, redaction and a final high-risk path audit. This reduces accidental leakage, but manual review is still required before sharing a bundle.
-
-Plugin matrices copy the source plugin into a fresh temporary runtime directory for each version before passing it to Claude. This protects the original plugin path from run-time mutation, but plugin code still executes with the same OS-account privileges as the Claude Code process.
-
-## Result artifacts
-
-Each run writes a JSON result under:
-
-```text
-.canary/results/<timestamp>-<scenario>.json
-```
-
-The artifact contains pass/fail, assertion failures, Claude exit status, changed files, verification command summaries, duration, tool-call count, token usage, cost and captured hook-event names when available. Raw model text is not copied into the summary artifact by default.
-
-Configuration experiments additionally write an aggregate `*-experiment.json` artifact with per-variant pass-rate and efficiency metrics. Plugin matrices write a `*-plugin-compat.json` artifact plus a matching `*-plugin-compat.md` table for README/release-note reuse.
-
-## Roadmap
-
-1. **v0.1 — deterministic harness**: run, compare, bisect, metrics, CI, GitHub Action
-2. **v0.2 — version intelligence**: signed isolated historical binaries + automatic published-release bisect
-3. **v0.3 — configuration experiments**: A/B testing core shipped; multi-scenario suites and noise/confidence reporting next
-4. **v0.4 — record/replay**: core recording + exact-commit replay shipped; one-command capture and smarter assertion suggestions next
-5. **v0.5 — repro bundles**: privacy-first minimal fixture export, launchers and issue report shipped
-6. **v0.6 — ecosystem**: plugin compatibility matrix + automatic smoke-suite generation shipped; multi-plugin suites, Action mode and badge/reporting integrations next
-7. **v1.0 — stable scenario schema and reporter API**
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for details.
-
-## Design principles
-
-- **Deterministic first.** Prefer test commands and filesystem assertions over LLM-as-judge.
-- **Same starting state.** Comparisons run from the same Git commit in separate worktrees.
-- **No hidden permissions.** Canary does not silently weaken Claude Code security settings.
-- **Useful failures.** A regression report should be attachable to an upstream bug report.
-- **Provider-specific on purpose.** Canary targets Claude Code deeply rather than being a shallow generic agent benchmark.
-
-## Development
-
-```bash
-npm install
-npm test
-npm run build
-npm run lint
-```
+| Guide | What it covers |
+| --- | --- |
+| [GitHub Action](docs/GITHUB_ACTION.md) | Marketplace usage, modes, inputs, outputs and CI security |
+| [Plugin suites](docs/PLUGIN_SUITE.md) | Full release × plugin-surface matrices |
+| [Plugin smoke generator](docs/PLUGIN_SMOKE_GENERATOR.md) | Discovery rules and generated scenarios |
+| [Plugin compatibility](docs/PLUGIN_COMPATIBILITY.md) | Focused plugin matrices and isolation |
+| [Version manager](docs/VERSION_MANAGER.md) | Release cache, checksums and signature trust |
+| [Configuration experiments](docs/CONFIG_EXPERIMENTS.md) | A/B test layout and interpretation |
+| [Record & replay](docs/RECORD_REPLAY.md) | Recording workflow and privacy model |
+| [Reproduction bundles](docs/REPRO_BUNDLES.md) | Safe bundle generation and publishing checklist |
+| [Security model](docs/SECURITY_MODEL.md) | Trust boundaries and threat model |
+| [Reproducibility](docs/REPRODUCIBILITY.md) | Determinism guarantees and unavoidable variance |
+| [Releasing](docs/RELEASING.md) | v1 tags, Marketplace and release checklist |
+| [Roadmap](docs/ROADMAP.md) | What is shipped and what comes next |
 
 ## Contributing
 
-Issues and PRs are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Bug reports, focused feature proposals and compatibility fixtures are welcome. Please run:
+
+```bash
+npm install --ignore-scripts
+npm run check
+```
+
+before opening a PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Project status
+
+**v1.0.0** freezes the scenario `version: 1`, core run result `schemaVersion: 1`, public package entry point and CLI command names documented here. Future incompatible schema changes must use an explicit new schema version and migration path rather than silently reinterpreting v1 data.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
+
+Claude and Claude Code are products/trademarks of Anthropic. Claude Code Canary is an independent open-source project and is not affiliated with or endorsed by Anthropic.

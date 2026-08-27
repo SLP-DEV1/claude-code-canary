@@ -5,8 +5,9 @@ import { spawnCapture } from './process.js';
 
 async function git(args: string[], cwd: string): Promise<string> {
   const result = await spawnCapture('git', args, { cwd, timeoutMs: 60_000 });
-  if (result.code !== 0) {
-    throw new Error(`git ${args.join(' ')} failed (${result.code}): ${result.stderr.trim()}`);
+  if (result.code !== 0 || result.outputTruncated) {
+    const reason = result.outputTruncated ? 'output exceeded capture limit' : `exit ${result.code}`;
+    throw new Error(`git ${args.join(' ')} failed (${reason}): ${result.stderr.trim()}`);
   }
   return result.stdout.trim();
 }
@@ -42,7 +43,12 @@ export interface WorktreeHandle {
 export async function createDetachedWorktree(repoRoot: string, ref = 'HEAD'): Promise<WorktreeHandle> {
   const parent = await mkdtemp(path.join(tmpdir(), 'cc-canary-'));
   const worktreePath = path.join(parent, 'worktree');
-  await git(['worktree', 'add', '--detach', worktreePath, ref], repoRoot);
+  try {
+    await git(['worktree', 'add', '--detach', worktreePath, ref], repoRoot);
+  } catch (error) {
+    await rm(parent, { recursive: true, force: true });
+    throw error;
+  }
 
   return {
     path: worktreePath,

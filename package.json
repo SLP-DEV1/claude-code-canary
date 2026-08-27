@@ -1,8 +1,16 @@
 {
   "name": "claude-code-canary",
-  "version": "0.1.0",
-  "description": "Regression testing, comparison and bisect tooling for Claude Code",
+  "version": "1.0.0",
+  "description": "Deterministic regression testing, release bisection and plugin compatibility matrices for Claude Code",
   "type": "module",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    }
+  },
   "bin": {
     "claude-canary": "./dist/index.js"
   },
@@ -17,32 +25,51 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run lint && npm test && npm run build",
+    "prepublishOnly": "npm run check"
   },
   "keywords": [
     "claude-code",
     "anthropic",
     "regression-testing",
+    "compatibility-testing",
+    "version-bisect",
+    "github-actions",
+    "plugins",
+    "mcp",
     "agent-evals",
-    "cli",
-    "ai-coding"
+    "ai-coding",
+    "cli"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SLP-DEV1/claude-code-canary.git"
+  },
+  "homepage": "https://github.com/SLP-DEV1/claude-code-canary#readme",
+  "bugs": {
+    "url": "https://github.com/SLP-DEV1/claude-code-canary/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "commander": "^14.0.0",
-    "minimatch": "^10.0.3",
-    "openpgp": "^6.3.1",
-    "yaml": "^2.8.1",
-    "zod": "^4.1.5"
+    "commander": "14.0.3",
+    "minimatch": "10.2.6",
+    "openpgp": "6.3.1",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@openpgp/web-stream-tools": "^0.3.1",
-    "@types/node": "^24.3.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "@openpgp/web-stream-tools": "0.3.1",
+    "@types/node": "24.13.3",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
   }
 }

@@ -1,87 +1,182 @@
 # Claude Canary GitHub Action
 
-Claude Canary can run the same deterministic scenario against a known-good Claude Code release and a candidate release directly in GitHub Actions.
+Claude Canary v1 exposes one composite Action for deterministic release comparisons and plugin compatibility gates.
 
-## Quick start
+Supported modes:
 
-1. Add a Canary scenario such as `.canary/basic.canary.yml` to your repository.
-2. Add `ANTHROPIC_API_KEY` as a GitHub Actions repository secret.
-3. Create `.github/workflows/claude-canary.yml`:
+- `compare`
+- `run`
+- `plugin-matrix`
+- `plugin-suite`
+
+The Action streams Canary output into the job log, writes a useful GitHub Step Summary and uploads `.canary/results/` by default.
+
+## Plugin suite quick start
+
+Commit a generated/reviewed plugin smoke suite to your repository, then create `.github/workflows/claude-canary.yml`:
 
 ```yaml
 name: Claude Canary
 
 on:
-  pull_request:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  regression-check:
+  plugin-compatibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: SLP-DEV1/claude-code-canary@main
+      - uses: SLP-DEV1/claude-code-canary@v1
         with:
-          scenario: .canary/basic.canary.yml
-          from: 2.1.89
-          to: latest
+          mode: plugin-suite
+          plugin: ./my-plugin
+          last: 10
 ```
 
-Use an exact release you trust for `from`. The `to` input defaults to `latest`.
+For an exact, immutable Action release use `@v1.0.0` instead of the moving `@v1` compatibility tag.
 
-> `@main` is the development channel while the project is in early `0.x`. Stable major-version references such as `@v1` will be documented when that release line exists.
+## Compare two Claude Code releases
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: compare
+    scenario: .canary/basic.canary.yml
+    from: 2.1.220
+    to: latest
+```
+
+`compare` requires `from`; `to` defaults to `latest`.
+
+## Run one scenario
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: run
+    scenario: .canary/basic.canary.yml
+```
+
+## Run one plugin scenario across releases
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: plugin-matrix
+    scenario: .canary/plugins/my-plugin/command-review.canary.yml
+    plugin: ./my-plugin
+    from: 2.1.220
+    to: 2.1.237
+```
+
+You can use `versions` or `last` instead of `from`/`to`.
 
 ## Inputs
 
-| Input | Required | Default | Description |
+| Input | Default | Used by | Description |
 | --- | --- | --- | --- |
-| `scenario` | no | `.canary/basic.canary.yml` | Scenario file in the checked-out repository |
-| `from` | yes | — | Known-good Claude Code release: exact version, `stable`, or `latest` |
-| `to` | no | `latest` | Candidate Claude Code release |
-| `node-version` | no | `22` | Node.js used to build/run Canary |
-| `upload-results` | no | `true` | Upload JSON result files as a workflow artifact |
+| `mode` | `compare` | all | `compare`, `run`, `plugin-matrix`, or `plugin-suite` |
+| `scenario` | mode-specific | compare/run/matrix | Scenario path |
+| `from` | — | compare/plugin modes | Baseline for compare, or oldest exact release in plugin range mode |
+| `to` | compare: `latest` | compare/plugin modes | Candidate for compare, or newest exact release in plugin range mode |
+| `plugin` | — | plugin modes | Plugin directory |
+| `suite` | auto | plugin-suite | Generated Canary plugin-suite directory |
+| `versions` | — | plugin modes | Space/comma-separated exact `x.y.z` releases |
+| `last` | `10` | plugin modes | Newest published releases to test |
+| `platform` | host | plugin modes | Supported Claude Code platform id override |
+| `max-runs` | `200` | plugin-suite | Safety budget for `scenarios × releases` |
+| `fail-on-incompatible` | `true` | plugin modes | Set `false` for report-only historical matrices |
+| `node-version` | `22` | all | Node used to build/run Canary |
+| `upload-results` | `true` | all | Upload `.canary/results/` after the run |
+| `artifact-name` | generated | all | Optional artifact name override |
+| `retention-days` | `14` | all | Artifact retention |
 
-## What the Action does
+Version selectors for plugin modes are mutually exclusive in practice: use one of `versions`, `from` + `to`, or `last`. `versions` takes priority in Action argument construction.
 
-The Action:
+## Outputs
 
-- installs and builds Claude Canary inside the Action checkout
-- downloads/authenticates the requested Claude Code releases through Canary's version manager
-- executes the same scenario against baseline and candidate releases
-- writes the comparison to the GitHub Actions Step Summary
-- fails the workflow when the candidate fails the deterministic scenario
-- uploads `.canary/results/*.json` as a workflow artifact by default
+| Output | Description |
+| --- | --- |
+| `results-path` | `.canary/results` directory used by the Action |
+| `report-path` | Combined Markdown report when the mode creates one |
+| `passed` | `true` when Canary exited successfully |
+| `exit-code` | Canary CLI exit code |
+| `artifact-name` | Unique default artifact name generated for the run |
 
-The calling repository must be checked out first. `fetch-depth: 0` is recommended because Canary creates detached Git worktrees from the repository state.
+## Step Summary and artifacts
 
-## Add a badge
+`plugin-matrix` and `plugin-suite` already produce Markdown reports. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
 
-When your workflow file is `.github/workflows/claude-canary.yml`, add this to your README and replace `OWNER/REPO`:
+For modes without a combined Markdown report, the Action adds a bounded excerpt of the live CLI output to the summary. Full progress remains in the job log.
+
+Artifact upload uses a run-specific name by default so parallel/retried jobs do not collide.
+
+## How command execution is built
+
+The Action runner is `scripts/action-runner.mjs`. It validates Action inputs, builds an argument array and launches:
+
+```text
+node <action>/dist/index.js <args...>
+```
+
+with `shell: false`.
+
+Paths or version selectors supplied through Action inputs are not concatenated into a shell command string. The only shell layer in the composite Action launches the fixed Node runner path.
+
+## Security
+
+### Treat scenarios as code
+
+A Canary scenario can contain setup/verification shell commands and Claude permission options. A configuration experiment can include hooks/MCP/plugin configuration. These are trusted inputs, not sandboxed data.
+
+### Do not hand secrets to untrusted forks
+
+Never combine privileged credentials with arbitrary fork code/scenarios. Safe defaults include:
+
+- `workflow_dispatch`;
+- trusted branch `push` events;
+- PR workflows where secrets are intentionally unavailable to forks.
+
+Be especially careful with `pull_request_target`: it runs with privileges from the base repository. Do not use it to check out and execute arbitrary untrusted fork contents with secrets.
+
+### Worktree isolation is not OS isolation
+
+Canary protects the checked-out Git source through disposable worktrees. Commands still execute as the GitHub runner user and can access resources available to that runner.
+
+See [`SECURITY_MODEL.md`](SECURITY_MODEL.md) for the complete v1 trust model.
+
+## Cost controls
+
+Claude runs can consume API usage. Keep deterministic scenarios small and use:
+
+- `claude.max_turns`;
+- `claude.max_budget_usd` where supported;
+- scenario `limits`;
+- plugin-suite `max-runs`.
+
+When a scenario configures `max_cost_usd` but Claude does not report cost, v1 fails closed rather than silently ignoring the limit.
+
+## Badge
+
+For a workflow named `.github/workflows/claude-canary.yml`:
 
 ```md
 [![Claude Canary](https://github.com/OWNER/REPO/actions/workflows/claude-canary.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/claude-canary.yml)
 ```
 
-For a custom `Claude Canary` label via Shields.io:
+## Marketplace release
 
-```md
-[![Claude Canary](https://img.shields.io/github/actions/workflow/status/OWNER/REPO/claude-canary.yml?branch=main&label=Claude%20Canary)](https://github.com/OWNER/REPO/actions/workflows/claude-canary.yml)
-```
+The root `action.yml` contains Marketplace metadata, branding, inputs and outputs. Publishing the listing is performed from a tagged GitHub Release by enabling **Publish this Action to the GitHub Marketplace**.
 
-This makes Canary visible in every repository that uses it while keeping the badge tied to the real workflow status.
-
-## Security and cost
-
-Claude runs non-interactively with the permissions configured by your scenario and consumes Anthropic API usage. Store credentials only in GitHub Actions secrets; do not put API keys in the workflow or scenario file.
-
-Canary isolates repository files with disposable Git worktrees, not the entire GitHub runner. Treat setup, verification, hooks, MCP servers and Claude-issued commands as code execution on the runner.
+See [`RELEASING.md`](RELEASING.md) for the exact v1 release/Marketplace checklist.

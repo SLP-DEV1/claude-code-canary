@@ -8,26 +8,67 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
     strategy:
+      fail-fast: false
       matrix:
-        node: [20, 22, 24]
-    runs-on: ubuntu-latest
+        include:
+          - os: ubuntu-latest
+            node: 20
+          - os: ubuntu-latest
+            node: 22
+          - os: ubuntu-latest
+            node: 24
+          - os: windows-latest
+            node: 22
+          - os: macos-latest
+            node: 22
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: package.json
-      - run: npm install --ignore-scripts
-      - run: npm test
-      - run: npm run lint
-      - run: npm run build
-      - name: Smoke-test CLI name
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+      - name: Smoke-test public CLI commands
+        shell: bash
         run: |
-          node dist/index.js --help | grep -q "Usage: claude-canary"
-          node dist/index.js plugin-init --help | grep -q "generate smoke-test scenarios"
-          node dist/index.js plugin-suite --help | grep -q "Run every generated plugin smoke scenario"
-          node dist/index.js plugin-matrix --help | grep -q "Test one Claude Code plugin"
+          node - <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const cases = [
+            [['--help'], 'Usage: claude-canary'],
+            [['--version'], '1.0.0'],
+            [['plugin-init', '--help'], 'generate smoke-test scenarios'],
+            [['plugin-suite', '--help'], 'Run every generated plugin smoke scenario'],
+            [['plugin-matrix', '--help'], 'Test one Claude Code plugin'],
+          ];
+          for (const [args, expected] of cases) {
+            const output = execFileSync(process.execPath, ['dist/index.js', ...args], { encoding: 'utf8' });
+            if (!output.includes(expected)) throw new Error(`${args.join(' ')} did not contain ${expected}`);
+          }
+          NODE
+
+  package:
+    name: package sanity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - run: npm pack --dry-run --ignore-scripts

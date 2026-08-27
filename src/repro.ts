@@ -31,6 +31,15 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
+async function removeTree(target: string): Promise<void> {
+  await rm(target, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 8 : 2,
+    retryDelay: 100,
+  });
+}
+
 function safeSlug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'repro';
 }
@@ -142,14 +151,18 @@ export async function createReproBundle(resultPath: string, options: ReproOption
           'Choose another output directory or remove the directory manually after reviewing it.',
         );
       }
-      await rm(finalTarget, { recursive: true, force: true });
+      await removeTree(finalTarget);
     }
 
     await rename(tempBundle, finalTarget);
-    await rm(tempParent, { recursive: true, force: true });
+    await removeTree(tempParent);
     return { ...generated, outputPath: finalTarget };
   } catch (error) {
-    await rm(tempParent, { recursive: true, force: true });
+    try {
+      await removeTree(tempParent);
+    } catch {
+      // Cleanup must never hide the original repro-generation error.
+    }
     throw error;
   }
 }

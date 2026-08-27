@@ -5,6 +5,7 @@ export interface ProcessResult {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  outputTruncated?: boolean;
 }
 
 export interface CommandSummary {
