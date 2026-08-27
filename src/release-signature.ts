@@ -89,7 +89,11 @@ export async function verifyDetachedManifestSignature(
 ): Promise<void> {
   let signature: openpgp.Signature;
   try {
-    signature = await openpgp.readSignature({ binarySignature: signatureBytes });
+    const signatureText = new TextDecoder().decode(signatureBytes);
+    const isArmored = signatureText.trimStart().startsWith('-----BEGIN PGP SIGNATURE-----');
+    signature = isArmored
+      ? await openpgp.readSignature({ armoredSignature: signatureText })
+      : await openpgp.readSignature({ binarySignature: signatureBytes });
   } catch (error) {
     throw new Error(`Invalid detached release signature: ${error instanceof Error ? error.message : String(error)}`);
   }
