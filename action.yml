@@ -1,5 +1,5 @@
 name: Claude Code Canary
-description: Regression-test Claude Code releases, pull requests, MCP contracts, committed baselines, plugins and configs with deterministic scenarios.
+description: Regression-test Claude Code releases, plugins, MCP servers and configs with deterministic scenarios and version bisecting.
 author: SLP-DEV1
 
 branding:
