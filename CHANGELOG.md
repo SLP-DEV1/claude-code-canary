@@ -10,6 +10,9 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - measure real headless permission prompts through an isolated MCP `--permission-prompt-tool` probe and capture auto-mode `PermissionDenied` events through an additive temporary hook without persisting raw tool inputs
 - preserve ordered hook lifecycle traces and support ordered/exact hook assertions plus release-to-release hook-sequence stability checks
 - automatically enable Claude Code hook-event streaming when hook assertions or hook-sequence comparisons require it
+- add `pr-check` for same-Claude base-vs-head Git regression reports with Markdown/JSON output
+- add committed, scenario-hash-protected metric baselines so recurring CI can compare with one Claude run
+- add `pr-check` / `baseline-check` GitHub Action modes, shallow-checkout PR SHA hydration, and opt-in stable PR report comments
 
 ## [1.0.1] - 2026-08-27
 
