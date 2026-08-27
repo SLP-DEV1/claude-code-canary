@@ -13,12 +13,15 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 - label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
 - add a real Claude Code E2E harness with scheduled `core` coverage and a broader manual `full` suite for release validation
+- route the hosted live E2E through Groq `qwen/qwen3.6-27b` by default, with OpenRouter `openrouter/free` fallback only for recognized Groq rate/quota limits
+- pin the headless Claude-to-OpenAI provider adapter used by hosted live tests to an exact upstream commit
 
 ### Documentation
 
 - document custom and local Claude Code gateways, including a successfully tested Claude Code Router → llama.cpp → Qwen3.8-27B setup
 - clarify that reported cost values may be estimated, synthetic or otherwise unrelated to real billing when a proxy or local model is used
 - document local and GitHub Actions live E2E setup, authentication, cost and trust boundaries
+- document the free-provider live E2E path and the distinction between provider fallback and real Canary regression failures
 
 ## [1.0.0] - 2026-08-27
 
