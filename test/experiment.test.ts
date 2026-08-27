@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -119,5 +119,16 @@ describe('configuration experiments', () => {
     await mkdir(path.join(variant, '.claude'), { recursive: true });
     await writeFile(path.join(variant, '.claude', 'settings.json'), '{broken');
     await expect(validateConfigVariant(variant)).rejects.toThrow(/invalid json/i);
+  });
+
+  it('refuses symlinks anywhere in a configuration variant', async () => {
+    if (process.platform === 'win32') return;
+    const root = await tempRoot();
+    const variant = path.join(root, 'variant');
+    await mkdir(path.join(variant, '.claude'), { recursive: true });
+    const outside = path.join(root, 'outside.json');
+    await writeFile(outside, '{"permissions":{}}\n');
+    await symlink(outside, path.join(variant, '.claude', 'settings.json'));
+    await expect(validateConfigVariant(variant)).rejects.toThrow(/symbolic link/i);
   });
 });
