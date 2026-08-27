@@ -9,6 +9,18 @@ import { verifyReleaseManifest, type ManifestVerification } from './release-sign
 
 const RELEASE_BASE = 'https://downloads.claude.ai/claude-code-releases';
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
+const MAX_METADATA_BYTES = 8 * 1024 * 1024;
+const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
+const SUPPORTED_PLATFORM_IDS = new Set([
+  'win32-x64',
+  'win32-arm64',
+  'darwin-x64',
+  'darwin-arm64',
+  'linux-x64',
+  'linux-arm64',
+  'linux-x64-musl',
+  'linux-arm64-musl',
+]);
 
 interface ManifestPlatform {
   checksum: string;
@@ -59,6 +71,17 @@ export function isExactVersion(value: string): boolean {
   return EXACT_VERSION.test(value);
 }
 
+export function validatePlatformId(value: string): string {
+  if (!SUPPORTED_PLATFORM_IDS.has(value)) {
+    throw new Error(`Unsupported Claude Code platform id: ${JSON.stringify(value)}.`);
+  }
+  return value;
+}
+
+function selectedPlatform(value?: string): string {
+  return value === undefined ? platformId() : validatePlatformId(value);
+}
+
 function detectMusl(): boolean {
   if (process.platform !== 'linux') return false;
   try {
@@ -102,10 +125,16 @@ function validateResolvedVersion(value: string, source: string): string {
   return version;
 }
 
-async function fetchBytes(url: string): Promise<Uint8Array> {
+async function fetchBytes(url: string, maxBytes = MAX_METADATA_BYTES): Promise<Uint8Array> {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok) throw new Error(`HTTP ${response.status} while fetching ${url}`);
-  return new Uint8Array(await response.arrayBuffer());
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Response too large while fetching ${url}: ${declaredLength} bytes exceeds ${maxBytes}.`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > maxBytes) throw new Error(`Response too large while fetching ${url}: exceeds ${maxBytes} bytes.`);
+  return bytes;
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -139,7 +168,7 @@ function parseManifest(raw: string, expectedVersion: string): ReleaseManifest {
     if (typeof platform.checksum !== 'string' || !/^[a-fA-F0-9]{64}$/.test(platform.checksum)) continue;
     platforms[id] = {
       checksum: platform.checksum.toLowerCase(),
-      size: typeof platform.size === 'number' && Number.isFinite(platform.size) ? platform.size : undefined,
+      size: typeof platform.size === 'number' && Number.isSafeInteger(platform.size) && platform.size > 0 ? platform.size : undefined,
     };
   }
   return { version: expectedVersion, buildDate: typeof record.buildDate === 'string' ? record.buildDate : undefined, platforms };
@@ -165,15 +194,25 @@ async function hashFile(file: string): Promise<{ checksum: string; bytes: number
   return { checksum: hash.digest('hex'), bytes };
 }
 
-async function downloadBinary(url: string, destination: string): Promise<{ checksum: string; bytes: number }> {
+async function downloadBinary(url: string, destination: string, expectedSize?: number): Promise<{ checksum: string; bytes: number }> {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok || !response.body) throw new Error(`HTTP ${response.status} while downloading ${url}`);
+
+  const maxBytes = expectedSize ?? MAX_BINARY_BYTES;
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Claude Code download is larger than expected: ${declaredLength} bytes exceeds ${maxBytes}.`);
+  }
 
   const hash = createHash('sha256');
   let bytes = 0;
   const meter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       bytes += chunk.length;
+      if (bytes > maxBytes) {
+        callback(new Error(`Claude Code download exceeded ${maxBytes} bytes.`));
+        return;
+      }
       hash.update(chunk);
       callback(null, chunk);
     },
@@ -212,7 +251,7 @@ export async function installClaudeVersion(
   options: InstallVersionOptions = {},
 ): Promise<InstalledClaudeVersion> {
   const version = await resolveClaudeVersion(spec);
-  const platform = options.platform ?? platformId();
+  const platform = selectedPlatform(options.platform);
   const cacheRoot = options.cacheRoot ?? defaultVersionCacheRoot();
   const versionDir = path.join(cacheRoot, 'versions', version, platform);
   const executablePath = path.join(versionDir, executableName(platform));
@@ -234,7 +273,7 @@ export async function installClaudeVersion(
     options,
     verification.mode === 'signed'
       ? `Verified signed release manifest (${verification.fingerprint}).`
-      : `Release predates signed manifests; using checksum-only verification.`,
+      : 'Release predates signed manifests; using checksum-only verification.',
   );
 
   await mkdir(versionDir, { recursive: true });
@@ -270,7 +309,7 @@ export async function installClaudeVersion(
   status(options, `Downloading Claude Code ${version} (${platform})...`);
 
   try {
-    const downloaded = await downloadBinary(url, temporary);
+    const downloaded = await downloadBinary(url, temporary, expected.size);
     if (downloaded.checksum !== expected.checksum) {
       throw new Error(`SHA256 mismatch for Claude Code ${version} ${platform}: expected ${expected.checksum}, got ${downloaded.checksum}`);
     }
@@ -305,10 +344,10 @@ export async function cachedClaudePath(
   options: Pick<InstallVersionOptions, 'platform' | 'cacheRoot'> = {},
 ): Promise<string> {
   if (!isExactVersion(version)) throw new Error('Cached path lookup requires an exact x.y.z version.');
-  const platform = options.platform ?? platformId();
+  const platform = selectedPlatform(options.platform);
   const cacheRoot = options.cacheRoot ?? defaultVersionCacheRoot();
   const executablePath = path.join(cacheRoot, 'versions', version, platform, executableName(platform));
-  if (!(await fileExists(executablePath))) throw new Error(`Claude Code ${version} (${platform}) is not cached. Run: cc-canary versions install ${version}`);
+  if (!(await fileExists(executablePath))) throw new Error(`Claude Code ${version} (${platform}) is not cached. Run: claude-canary versions install ${version}`);
   return executablePath;
 }
 
@@ -324,7 +363,7 @@ function compareVersionsDesc(a: string, b: string): number {
 export async function listCachedClaudeVersions(
   options: Pick<InstallVersionOptions, 'platform' | 'cacheRoot'> = {},
 ): Promise<string[]> {
-  const platform = options.platform ?? platformId();
+  const platform = selectedPlatform(options.platform);
   const cacheRoot = options.cacheRoot ?? defaultVersionCacheRoot();
   const root = path.join(cacheRoot, 'versions');
   let entries;
@@ -344,7 +383,7 @@ export async function listCachedClaudeVersions(
 }
 
 export async function readCachedManifest(version: string, options: Pick<InstallVersionOptions, 'platform' | 'cacheRoot'> = {}): Promise<string> {
-  const platform = options.platform ?? platformId();
+  const platform = selectedPlatform(options.platform);
   const cacheRoot = options.cacheRoot ?? defaultVersionCacheRoot();
   return readFile(path.join(cacheRoot, 'versions', version, platform, 'manifest.json'), 'utf8');
 }
