@@ -25,7 +25,7 @@ Percentage thresholds are directional: an equal or lower candidate value is not 
 
 Plain `claude -p` does not expose interactive permission dialogs, and Claude Code documents that `PermissionRequest` hooks do not fire for ordinary non-interactive `-p` permission decisions. Canary therefore does **not** infer prompts from hook text or final output.
 
-When a permission-prompt assertion or comparison is configured, Canary loads an ephemeral local plugin and supplies its MCP tool through `--permission-prompt-tool`. Claude Code invokes that tool only when the headless run needs a permission decision. The probe records the requested **tool name only**, returns the original tool input unchanged, and allows execution to continue so Canary can evaluate the final task and the permission regression independently. Raw tool arguments are not persisted in the Canary result.
+When a permission-prompt assertion or comparison is configured, Canary creates an ephemeral local MCP server and passes it through `--mcp-config` plus `--permission-prompt-tool`. Claude Code invokes that tool only when the headless run needs a permission decision. The probe records the requested **tool name only**, returns the original tool input unchanged, and allows execution to continue so Canary can evaluate the final task and the permission regression independently. Raw tool arguments are not persisted in the Canary result.
 
 ```yaml
 expect:
@@ -92,11 +92,11 @@ Claude Code runs sibling hooks for the **same event in parallel**. Canary theref
 
 ## Instrumentation is isolated
 
-Permission instrumentation lives in a temporary plugin directory outside the tested Git worktree and is deleted after the run. It does not overwrite project or user hooks. The prompt probe is added only when permission-prompt metrics are requested; the `PermissionDenied` recorder is added only when a denial metric is requested.
+All permission instrumentation lives in a temporary directory outside the tested Git worktree and is deleted after the run. It does not overwrite project or user hooks. Prompt metrics use an explicit temporary `--mcp-config`, which remains available even when a scenario uses `--strict-mcp-config`. The `PermissionDenied` recorder is an additive temporary plugin hook and is loaded only when a denial metric is requested.
 
 Hook streaming is enabled only when hook assertions/comparisons need it (or when `claude.include_hook_events: true` is explicitly configured).
 
-The permission probe necessarily adds a small MCP/plugin schema footprint to runs that request permission metrics. Release comparisons apply the same instrumentation to baseline and candidate. Keep that in mind when interpreting absolute token budgets alongside permission assertions.
+The permission prompt probe necessarily adds a small MCP tool-schema footprint to runs that request prompt metrics, and the denial recorder adds a tiny hook only when requested. Release comparisons apply the same instrumentation to baseline and candidate. Keep that in mind when interpreting absolute token budgets alongside permission assertions.
 
 ## Complete example
 
