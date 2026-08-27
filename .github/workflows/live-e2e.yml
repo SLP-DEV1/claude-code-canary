@@ -31,7 +31,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      CLAUDE_CANARY_GEMINI_MODEL: gemini-2.5-flash
+      CLAUDE_CANARY_GEMINI_MODEL: gemini-3.6-flash
       CLAUDE_CANARY_GROQ_MODEL: openai/gpt-oss-120b
       CLAUDE_CANARY_OPENROUTER_MODEL: openrouter/free
 
