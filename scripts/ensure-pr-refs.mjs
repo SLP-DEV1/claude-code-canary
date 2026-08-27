@@ -22,14 +22,36 @@ export function exactPullRequestRefs(event, explicitBase = '', explicitHead = ''
   };
 }
 
-async function ensureExactSha(sha, cwd) {
-  if (!SHA.test(sha)) return;
+export function pullRequestFetchFallbacks(event, explicitBase = '', explicitHead = '') {
+  const pr = event?.pull_request;
+  const number = Number(pr?.number ?? event?.number);
+  const baseRef = typeof pr?.base?.ref === 'string' && pr.base.ref ? `refs/heads/${pr.base.ref}` : undefined;
+  const pullHead = Number.isInteger(number) && number > 0 ? `refs/pull/${number}/head` : undefined;
+  return {
+    base: explicitBase ? undefined : baseRef,
+    head: explicitHead ? undefined : pullHead,
+  };
+}
+
+async function hasCommit(sha, cwd) {
   const exists = await runGit(['cat-file', '-e', `${sha}^{commit}`], cwd);
-  if (exists.code === 0) return;
-  const fetched = await runGit(['fetch', '--no-tags', '--depth=1', 'origin', sha], cwd);
-  if (fetched.code !== 0) throw new Error(`git fetch failed for PR commit ${sha.slice(0, 12)}: ${fetched.stderr.trim()}`);
-  const verified = await runGit(['cat-file', '-e', `${sha}^{commit}`], cwd);
-  if (verified.code !== 0) throw new Error(`Fetched PR commit ${sha.slice(0, 12)} is still unavailable.`);
+  return exists.code === 0;
+}
+
+async function ensureExactSha(sha, cwd, fallbackRef) {
+  if (!SHA.test(sha) || await hasCommit(sha, cwd)) return;
+
+  const direct = await runGit(['fetch', '--no-tags', '--depth=1', 'origin', sha], cwd);
+  if (direct.code === 0 && await hasCommit(sha, cwd)) return;
+
+  if (fallbackRef) {
+    const fallback = await runGit(['fetch', '--no-tags', '--depth=1', 'origin', fallbackRef], cwd);
+    if (fallback.code === 0 && await hasCommit(sha, cwd)) return;
+    const detail = fallback.stderr.trim() || direct.stderr.trim();
+    throw new Error(`git fetch failed to hydrate PR commit ${sha.slice(0, 12)} via ${fallbackRef}: ${detail}`);
+  }
+
+  throw new Error(`git fetch failed for PR commit ${sha.slice(0, 12)}: ${direct.stderr.trim()}`);
 }
 
 async function main() {
@@ -38,10 +60,13 @@ async function main() {
   if (process.env.GITHUB_EVENT_PATH) {
     try { event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8')); } catch { event = {}; }
   }
-  const refs = exactPullRequestRefs(event, process.env.CANARY_BASE_REF || '', process.env.CANARY_HEAD_REF || '');
+  const explicitBase = process.env.CANARY_BASE_REF || '';
+  const explicitHead = process.env.CANARY_HEAD_REF || '';
+  const refs = exactPullRequestRefs(event, explicitBase, explicitHead);
+  const fallbacks = pullRequestFetchFallbacks(event, explicitBase, explicitHead);
   const cwd = process.env.GITHUB_WORKSPACE || process.cwd();
-  await ensureExactSha(refs.base, cwd);
-  if (refs.head !== refs.base) await ensureExactSha(refs.head, cwd);
+  await ensureExactSha(refs.base, cwd, fallbacks.base);
+  if (refs.head !== refs.base) await ensureExactSha(refs.head, cwd, fallbacks.head);
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('ensure-pr-refs.mjs')) {
