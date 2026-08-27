@@ -25,7 +25,7 @@ const fixtureRoot = path.resolve(process.env.CLAUDE_CANARY_E2E_DIR ?? path.join(
 const port = Number(process.env.CLAUDE_CANARY_PROVIDER_PORT ?? '3456');
 const selectedPath = path.join(providerRoot, 'selected.json');
 const pidPath = path.join(providerRoot, 'router.pid');
-const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-2.5-flash';
+const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-3.6-flash';
 const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const openRouterModel = process.env.CLAUDE_CANARY_OPENROUTER_MODEL ?? 'openrouter/free';
 
