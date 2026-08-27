@@ -10,7 +10,7 @@ describe('Claude Canary GitHub Action', () => {
       description?: string;
       branding?: { icon?: string; color?: string };
       inputs?: Record<string, { required?: boolean; default?: string }>;
-      runs?: { using?: string; steps?: Array<{ id?: string; uses?: string }> };
+      runs?: { using?: string; steps?: Array<{ id?: string; uses?: string; name?: string; continueOnError?: boolean }> };
       outputs?: Record<string, unknown>;
     };
 
@@ -21,11 +21,17 @@ describe('Claude Canary GitHub Action', () => {
     expect(action.inputs?.mode?.default).toBe('compare');
     expect(action.inputs?.scenario?.default).toBe('');
     expect(action.inputs?.from?.required).toBe(false);
+    expect(action.inputs?.['base-ref']?.default).toBe('');
+    expect(action.inputs?.['head-ref']?.default).toBe('');
+    expect(action.inputs?.baseline?.default).toBe('');
+    expect(action.inputs?.['comment-pr']?.default).toBe('false');
     expect(action.inputs?.last?.default).toBe('10');
     expect(action.inputs?.['max-runs']?.default).toBe('200');
     expect(action.inputs?.['fail-on-incompatible']?.default).toBe('true');
     expect(action.inputs?.['upload-results']?.default).toBe('true');
     expect(action.runs?.steps?.some((step) => step.id === 'canary')).toBe(true);
+    expect(action.runs?.steps?.some((step) => step.name === 'Ensure pull request refs are available')).toBe(true);
+    expect(action.runs?.steps?.some((step) => step.name === 'Update Claude Canary pull request comment')).toBe(true);
     expect(action.outputs).toHaveProperty('results-path');
     expect(action.outputs).toHaveProperty('report-path');
     expect(action.outputs).toHaveProperty('passed');
