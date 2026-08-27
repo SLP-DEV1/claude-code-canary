@@ -25,6 +25,7 @@ const fixtureRoot = path.resolve(process.env.CLAUDE_CANARY_E2E_DIR ?? path.join(
 const port = Number(process.env.CLAUDE_CANARY_PROVIDER_PORT ?? '3456');
 const selectedPath = path.join(providerRoot, 'selected.json');
 const pidPath = path.join(providerRoot, 'router.pid');
+const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-2.5-flash-lite';
 const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const openRouterModel = process.env.CLAUDE_CANARY_OPENROUTER_MODEL ?? 'openrouter/free';
 
@@ -36,6 +37,10 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) {
 }
 
 const providers = {
+  gemini: {
+    keyEnv: 'GEMINI_API_KEY',
+    model: geminiModel,
+  },
   groq: {
     keyEnv: 'GROQ_API_KEY',
     model: groqModel,
@@ -87,6 +92,7 @@ async function waitForHealth(child) {
 
 async function startRouter(providerName, { detached = false } = {}) {
   const provider = providers[providerName];
+  if (!provider) throw new Error(`Unsupported provider: ${providerName}`);
   if (!process.env[provider.keyEnv]) throw new Error(`${provider.keyEnv} is not configured.`);
   await mkdir(providerRoot, { recursive: true });
   const configPath = path.join(providerRoot, `ccasr-${providerName}.json`);
@@ -167,12 +173,13 @@ function runCaptured(command, args, { cwd, env }) {
   });
 }
 
-function isGroqRateLimit(text) {
+function isProviderCapacityLimit(text) {
   return [
     /\b429\b/i,
     /too many requests/i,
     /rate[ _-]?limit/i,
     /rate_limit_exceeded/i,
+    /resource[_ -]?exhausted/i,
     /quota/i,
     /requests per (?:day|minute)/i,
     /tokens per (?:day|minute)/i,
@@ -201,8 +208,8 @@ async function runSuite(providerName) {
         CLAUDE_CANARY_E2E_KEEP: '1',
       },
     });
-    // Let the router's pipe handlers flush any final provider error before
-    // deciding whether a failed Groq run is eligible for the fallback.
+    // Let the router pipe handlers flush a final provider error before deciding
+    // whether a failure is eligible for a capacity-only fallback.
     await new Promise((resolve) => setTimeout(resolve, 100));
     return {
       ok: result.status === 0,
@@ -215,43 +222,62 @@ async function runSuite(providerName) {
   }
 }
 
-async function runWithFallback() {
-  await mkdir(providerRoot, { recursive: true });
-  const hasGroq = Boolean(process.env.GROQ_API_KEY);
-  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
-  if (!hasGroq && !hasOpenRouter) {
-    throw new Error('Configure GROQ_API_KEY and/or OPENROUTER_API_KEY.');
+async function tryPrimaryWithOpenRouterFallback(primaryName, hasOpenRouter) {
+  const primary = await runSuite(primaryName);
+  if (primary.ok) {
+    return { selected: primaryName, fallbackUsed: false };
   }
 
-  let selected;
-  let fallbackUsed = false;
-  if (hasGroq) {
-    const primary = await runSuite('groq');
-    if (primary.ok) {
-      selected = 'groq';
-    } else if (hasOpenRouter && isGroqRateLimit(primary.diagnostic)) {
-      fallbackUsed = true;
-      console.warn('\nGroq hit a rate/quota limit. Retrying the complete live suite through OpenRouter.');
-      const fallback = await runSuite('openrouter');
-      if (!fallback.ok) throw new Error(`OpenRouter fallback failed with exit code ${fallback.status}.`);
-      selected = 'openrouter';
-    } else {
-      throw new Error(`Groq live suite failed with exit code ${primary.status}; not falling back because this does not look like a rate/quota limit.`);
-    }
+  if (hasOpenRouter && isProviderCapacityLimit(primary.diagnostic)) {
+    console.warn(`\n${primaryName} hit a rate/quota limit. Retrying the complete live suite through OpenRouter.`);
+    const fallback = await runSuite('openrouter');
+    if (!fallback.ok) throw new Error(`OpenRouter fallback failed with exit code ${fallback.status}.`);
+    return { selected: 'openrouter', fallbackUsed: true };
+  }
+
+  throw new Error(
+    `${primaryName} live suite failed with exit code ${primary.status}; ` +
+    'not falling back because this does not look like a provider rate/quota limit.',
+  );
+}
+
+async function runWithFallback() {
+  await mkdir(providerRoot, { recursive: true });
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+  const hasGroq = Boolean(process.env.GROQ_API_KEY);
+  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  if (!hasGemini && !hasGroq && !hasOpenRouter) {
+    throw new Error('Configure GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY.');
+  }
+
+  // Gemini is preferred for hosted free E2E because current Claude Code requests
+  // routinely exceed Groq Free's input-token-per-minute allowance. Groq remains
+  // supported for existing setups when Gemini is not configured.
+  let primaryProvider;
+  let result;
+  if (hasGemini) {
+    primaryProvider = 'gemini';
+    result = await tryPrimaryWithOpenRouterFallback('gemini', hasOpenRouter);
+  } else if (hasGroq) {
+    primaryProvider = 'groq';
+    result = await tryPrimaryWithOpenRouterFallback('groq', hasOpenRouter);
   } else {
+    primaryProvider = 'openrouter';
     const fallback = await runSuite('openrouter');
     if (!fallback.ok) throw new Error(`OpenRouter live suite failed with exit code ${fallback.status}.`);
-    selected = 'openrouter';
+    result = { selected: 'openrouter', fallbackUsed: false };
   }
 
   const selection = {
-    provider: selected,
-    model: providers[selected].model,
-    fallbackUsed,
+    primaryProvider,
+    provider: result.selected,
+    model: providers[result.selected].model,
+    fallbackUsed: result.fallbackUsed,
     selectedAt: new Date().toISOString(),
   };
   await writeFile(selectedPath, `${JSON.stringify(selection, null, 2)}\n`, 'utf8');
   appendGithubFile(process.env.GITHUB_OUTPUT, {
+    'primary-provider': selection.primaryProvider,
     provider: selection.provider,
     model: selection.model,
     'fallback-used': selection.fallbackUsed,
