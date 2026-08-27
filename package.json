@@ -1,6 +1,6 @@
 {
   "name": "claude-code-canary",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Deterministic regression testing, release bisection and plugin compatibility matrices for Claude Code",
   "type": "module",
   "main": "./dist/api.js",
