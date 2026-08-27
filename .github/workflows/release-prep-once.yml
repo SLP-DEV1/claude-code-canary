@@ -1,0 +1,36 @@
+name: One-shot v1.0.1 release prep
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor == 'SLP-DEV1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+      - name: Prepare synchronized v1.0.1 metadata
+        run: |
+          npm run release:version -- 1.0.1
+          npm run version:check
+      - name: Commit release candidate and remove this one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "SLP-DEV1"
+          git config user.email "aufgeklebt@outlook.de"
+          git rm .github/workflows/release-prep-once.yml
+          git add package.json package-lock.json src/version.ts
+          git diff --cached --check
+          git commit -m "chore: prepare v1.0.1 version"
+          git push origin HEAD:main
