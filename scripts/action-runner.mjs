@@ -79,6 +79,13 @@ function displayCommand(args) {
   return ['claude-canary', ...args].map(quote).join(' ');
 }
 
+export function escapeHtmlText(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 async function snapshotResults(directory) {
   try {
     return new Set(await readdir(directory));
@@ -187,7 +194,7 @@ async function main() {
     `## Claude Canary\n\n` +
     `**Mode:** \`${config.mode}\`  \n` +
     `**Result:** ${passed ? '✅ Passed' : '❌ Failed'}  \n` +
-    `**Command:** \`${command.replace(/`/g, '\\`')}\`\n\n` +
+    `**Command:** <code>${escapeHtmlText(command)}</code>\n\n` +
     `${body}\n`,
   );
 
@@ -198,7 +205,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   main().catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`claude-canary action: ${message}`);
-    await appendSummary(`## Claude Canary\n\n❌ Action configuration error: ${message}\n`);
+    await appendSummary(`## Claude Canary\n\n❌ Action configuration error: ${escapeHtmlText(message)}\n`);
     process.exitCode = 1;
   });
 }
