@@ -7,7 +7,8 @@ This checklist is the release contract for v1.x.
 The release branch must have:
 
 - `package.json` and `src/version.ts` on the same version;
-- `npm run check` green;
+- a committed `package-lock.json` matching `package.json`;
+- `npm run check` green after a clean `npm ci`;
 - package dry-run green;
 - CI green on Node 20, 22 and 24 on Linux plus Node 22 on Windows and macOS;
 - CodeQL green;
@@ -19,7 +20,7 @@ The release branch must have:
 Check locally:
 
 ```bash
-npm install --ignore-scripts
+npm ci --ignore-scripts
 npm run check
 npm pack --dry-run --ignore-scripts
 node dist/index.js --version
@@ -89,6 +90,7 @@ The package metadata is prepared for public npm publication, but Marketplace pub
 If publishing the npm package, use an authenticated release environment and verify the tarball first:
 
 ```bash
+npm ci --ignore-scripts
 npm pack --dry-run --ignore-scripts
 npm publish --provenance --access public
 ```
