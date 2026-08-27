@@ -103,7 +103,16 @@ Configure repository Actions secrets:
 - `GROQ_API_KEY` — recommended primary
 - `OPENROUTER_API_KEY` — recommended fallback
 
-At least one is required. With both configured, Groq is primary and OpenRouter is used only after a detected Groq `429`/rate/quota limit. If neither secret exists, the scheduled workflow records a clear skip notice instead of attempting model access. No secret value is printed.
+At least one is required for a manual run. With both configured, Groq is primary and OpenRouter is used only after a detected Groq `429`/rate/quota limit. If neither secret exists, a scheduled run records a clear skip notice instead of attempting model access. A **manual** run without provider authentication fails deliberately so a skipped manual run can never be mistaken for release evidence. No secret value is printed.
+
+Manual runs have an explicit run name:
+
+```text
+Live Claude E2E (core)
+Live Claude E2E (full)
+```
+
+The `full` form is part of the v1.x release contract. `.github/workflows/release.yml` queries GitHub Actions before publication and requires a successful `Live Claude E2E (full)` run whose `head_sha` exactly matches the immutable release commit. A successful full run on an older or newer commit does not satisfy the gate.
 
 The workflow installs current Claude Code using Anthropic's Linux installer, builds the checked-out Canary commit, builds the pinned provider router, preserves live result/provider artifacts, and records the selected provider/model plus whether fallback was used in the GitHub Step Summary.
 
