@@ -40,8 +40,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
-      - name: Syntax-check live E2E drivers
+      - name: Syntax-check maintenance and live E2E drivers
         run: |
+          node --check scripts/check-version-sync.mjs
+          node --check scripts/set-version.mjs
           node --check scripts/live-e2e.mjs
           node --check scripts/live-provider-e2e.mjs
       - name: Smoke-test public CLI commands
@@ -49,9 +51,10 @@ jobs:
         run: |
           node - <<'NODE'
           const { execFileSync } = require('node:child_process');
+          const expectedVersion = require('./package.json').version;
           const cases = [
             [['--help'], 'Usage: claude-canary'],
-            [['--version'], '1.0.0'],
+            [['--version'], expectedVersion],
             [['plugin-init', '--help'], 'generate smoke-test scenarios'],
             [['plugin-suite', '--help'], 'Run every generated plugin smoke scenario'],
             [['plugin-matrix', '--help'], 'Test one Claude Code plugin'],

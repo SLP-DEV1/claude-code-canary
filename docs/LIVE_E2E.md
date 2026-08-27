@@ -32,12 +32,12 @@ The repository's scheduled/manual workflow does **not** require an Anthropic sub
 
 Provider order:
 
-1. **Groq** using `qwen/qwen3.6-27b`
+1. **Groq** using `openai/gpt-oss-120b`
 2. **OpenRouter** using `openrouter/free` only when Groq reports a recognizable rate/quota limit
 
 The workflow intentionally does not retry ordinary Canary failures through OpenRouter. A broken assertion, Claude CLI incompatibility, plugin failure, malformed stream, or other non-rate-limit failure remains red. This prevents fallback from hiding real regressions.
 
-Groq is treated as the primary provider because its hosted Qwen model supports tool calling and is suitable for the small agentic fixture. OpenRouter's free-model router is used as a resilience fallback and may select different free models over time, so a fallback run is useful for transport/CLI compatibility but is less model-deterministic than the Groq primary run.
+Groq is treated as the primary provider because `openai/gpt-oss-120b` supports tool use and has a large enough output allowance for current Claude Code headless requests. The Groq free tier can still be too small for Claude Code's large prompt/token footprint, so recognized rate/quota failures are expected to fall back rather than being mistaken for Canary regressions. OpenRouter's free-model router may select different free models over time, so a fallback run is useful for transport/CLI compatibility but is less model-deterministic than the Groq primary route.
 
 The headless proxy is `claude-code-agent-sdk-router`, pinned in the workflow to commit `47e06284af53a6bef86bba0f411977b92db82440`. The workflow checks out that exact commit, installs dependencies with lifecycle scripts disabled, builds it, and uses only local `127.0.0.1` proxy traffic between Claude Code and the router.
 
@@ -88,7 +88,7 @@ node scripts/live-provider-e2e.mjs run core
 
 Optional model overrides:
 
-- `CLAUDE_CANARY_GROQ_MODEL` defaults to `qwen/qwen3.6-27b`
+- `CLAUDE_CANARY_GROQ_MODEL` defaults to `openai/gpt-oss-120b`
 - `CLAUDE_CANARY_OPENROUTER_MODEL` defaults to `openrouter/free`
 - `CLAUDE_CANARY_PROVIDER_PORT` defaults to `3456`
 

@@ -8,13 +8,19 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 - pass `--verbose` whenever Claude Code is invoked with `--output-format stream-json`, restoring compatibility with current headless Claude Code releases
 - add a regression test that locks the required `stream-json` invocation arguments
+- accept both ASCII-armored and binary detached OpenPGP release signatures, restoring verification for current Claude Code release manifests
+- make generated record/replay scenarios usable headlessly by preserving a safe edit-capable `acceptEdits` permission mode and a 10-turn allowance
+- detect asynchronous Groq rate/quota failures before deciding whether the hosted live E2E is eligible for OpenRouter fallback
 
 ### Changed
 
 - label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
 - add a real Claude Code E2E harness with scheduled `core` coverage and a broader manual `full` suite for release validation
-- route the hosted live E2E through Groq `qwen/qwen3.6-27b` by default, with OpenRouter `openrouter/free` fallback only for recognized Groq rate/quota limits
+- route the hosted live E2E through Groq `openai/gpt-oss-120b` by default, with OpenRouter `openrouter/free` fallback only for recognized Groq rate/quota limits
 - pin the headless Claude-to-OpenAI provider adapter used by hosted live tests to an exact upstream commit
+- add version-metadata consistency checks and a release-version helper so `package.json`, `package-lock.json` and the public CLI version stay synchronized
+- keep Dependabot minor/patch updates grouped while leaving major dependency upgrades isolated for explicit review
+- add an npm release workflow prepared for Trusted Publishing/OIDC, with an optional first-publication token fallback and automatic movement of the compatible `v1` Action tag after a successful publish
 
 ### Documentation
 
@@ -22,6 +28,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - clarify that reported cost values may be estimated, synthetic or otherwise unrelated to real billing when a proxy or local model is used
 - document local and GitHub Actions live E2E setup, authentication, cost and trust boundaries
 - document the free-provider live E2E path and the distinction between provider fallback and real Canary regression failures
+- document the v1.x release gate, version preparation, npm bootstrap publication and Trusted Publishing workflow
 
 ## [1.0.0] - 2026-08-27
 
