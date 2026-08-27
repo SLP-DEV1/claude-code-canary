@@ -4,6 +4,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-27
+
 ### Fixed
 
 - pass `--verbose` whenever Claude Code is invoked with `--output-format stream-json`, restoring compatibility with current headless Claude Code releases
@@ -26,6 +28,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - require manual live E2E runs to have real provider authentication so a skipped manual run cannot be recorded as successful release evidence
 - give live runs explicit `Live Claude E2E (core|full)` names and require a successful `full` run on the exact release commit before publication
 - harden the npm release workflow for Trusted Publishing/OIDC, rerun-safe exact-version checks, npm registry verification, automatic GitHub Release creation, and movement of the compatible `v1` Action tag only after the whole release chain succeeds
+- sharpen GitHub Marketplace metadata under the public `Claude Code Canary` name and expand npm discovery keywords without changing the v1 Action interface
 
 ### Documentation
 
@@ -34,6 +37,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - document local and GitHub Actions live E2E setup, authentication, cost and trust boundaries
 - document the Gemini-first free-provider live E2E path and the distinction between provider-capacity/availability fallback and real Canary regression failures
 - document the exact-commit `full` live E2E release gate, version preparation, npm bootstrap publication, automatic GitHub Release creation, and Trusted Publishing workflow
+- add a distribution checklist for npm, GitHub Marketplace and curated Claude Code directories, and synchronize README discovery links and version display with v1.0.1
 
 ## [1.0.0] - 2026-08-27
 
