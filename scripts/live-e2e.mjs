@@ -88,6 +88,28 @@ async function makeFixture() {
   run('git', ['commit', '-m', 'live e2e fixture'], { cwd: fixture });
 }
 
+async function tuneLivePluginScenarios() {
+  const pluginSuite = path.join(fixture, '.canary', 'plugins', 'live-e2e');
+  const entries = await readdir(pluginSuite, { withFileTypes: true });
+  let tuned = 0;
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.canary.yml')) continue;
+    const target = path.join(pluginSuite, entry.name);
+    const raw = await readFile(target, 'utf8');
+    const updated = raw.replace(/max_total_tokens:\s*80000\b/g, 'max_total_tokens: 160000');
+    if (updated !== raw) {
+      await writeFile(target, updated, 'utf8');
+      tuned += 1;
+    }
+  }
+
+  if (tuned === 0) {
+    throw new Error('Expected plugin-init to generate at least one scenario with the standard 80000-token guardrail.');
+  }
+  console.log(`\nAdjusted ${tuned} generated live plugin scenario(s) to a 160000-token E2E budget.`);
+}
+
 async function findFailedArtifact() {
   const resultsDir = path.join(fixture, '.canary', 'results');
   for (const entry of await readdir(resultsDir)) {
@@ -117,6 +139,7 @@ async function coreSuite() {
   canary(['compare', '.canary/live.canary.yml', '--baseline', claude, '--candidate', claude]);
 
   canary(['plugin-init', 'test-plugin', '--output', '.canary/plugins/live-e2e']);
+  await tuneLivePluginScenarios();
 }
 
 async function fullSuite() {
