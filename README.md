@@ -14,6 +14,7 @@
   <a href="#the-30-second-demo">30-second demo</a> ·
   <a href="#github-action">GitHub Action</a> ·
   <a href="docs/PLUGIN_SUITE.md">Plugin suites</a> ·
+  <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·
   <a href="docs/DISTRIBUTION.md">Distribution</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
@@ -68,6 +69,7 @@ claude-canary bisect .canary/plugin-smoke.canary.yml \
 | "Did agent usage blow up?" | Track tool calls, tokens, duration and reported cost. |
 | "Did this PR make the agent worse?" | Compare base vs head with the same Claude executable and fail on configured deltas. |
 | "Can CI do this without paying for two runs every time?" | Commit a known-good metric baseline and execute only the candidate. |
+| "Did my MCP server silently change?" | Snapshot tools/prompts/resources and fail on removed tools, schema changes or capability regressions. |
 
 Canary is not another transcript viewer or generic model leaderboard. It is a **regression layer for real Claude Code workflows**.
 
@@ -169,6 +171,18 @@ This is a community/custom deployment path, not part of Canary's guarantee that 
 Canary labels `total_cost_usd` as **reported cost**. With a proxy or local model, that value may be estimated, synthetic or otherwise unrelated to actual billing. Treat it as upstream accounting metadata unless your provider explicitly documents it as billable cost.
 
 ## Core workflows
+
+### Check an MCP server contract
+
+Inspect a stdio MCP server directly, without invoking a model:
+
+```bash
+claude-canary mcp-snapshot .canary/mcp/github.mcp.yml
+# review + commit the generated baseline
+claude-canary mcp-check .canary/mcp/github.mcp.yml --require-baseline
+```
+
+Canary snapshots tools and JSON Schemas, prompts, resources, resource templates, capabilities and observed `list_changed` signals. Removed tools, schema changes and disabled capabilities are breaking by default; additions are reported without failing CI. Tool safety annotations can also be asserted without executing the tool. See [MCP contract testing](docs/MCP_CONTRACTS.md).
 
 ### Gate a pull request
 

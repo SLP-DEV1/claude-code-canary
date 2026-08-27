@@ -4,6 +4,11 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+### Added
+
+- add protocol-native stdio MCP contract snapshots and checks for tools, JSON schemas, prompts, resources, resource templates and capabilities
+- add `mcp-snapshot`, `mcp-check` and `mcp-compare` with paginated discovery, fingerprinted baselines, tool-safety annotation assertions and breaking/non-breaking contract reports
+
 ## [1.1.0] - 2026-08-27
 
 ### Added
