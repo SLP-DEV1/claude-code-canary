@@ -11,6 +11,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - accept both ASCII-armored and binary detached OpenPGP release signatures, restoring verification for current Claude Code release manifests
 - make generated record/replay scenarios usable headlessly by preserving a safe edit-capable `acceptEdits` permission mode and a 10-turn allowance
 - detect asynchronous provider rate/quota failures before deciding whether hosted live E2E is eligible for a capacity fallback
+- recognize explicit upstream model-availability failures as provider fallback conditions without treating arbitrary 404/model-typo failures as eligible
 - remove patch-version literals from stable API/Action tests so future patch releases validate against current package metadata instead of a stale `1.0.0` expectation
 - raise generated plugin scenarios to a 160,000-token live-E2E budget so current Claude Code system/tool context does not trip the normal 80,000-token smoke-test guardrail
 
@@ -18,7 +19,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 - label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
 - add a real Claude Code E2E harness with scheduled `core` coverage and a broader manual `full` suite for release validation
-- prefer Gemini `gemini-2.5-flash-lite` for hosted free live E2E, retain Groq for existing configurations, and use OpenRouter `openrouter/free` only for recognized primary-provider rate/quota/capacity limits
+- prefer Gemini `gemini-2.5-flash` for hosted free live E2E, retain Groq for existing configurations, and use OpenRouter `openrouter/free` only for recognized primary-provider capacity/availability failures
 - pin the headless Claude-to-provider adapter used by hosted live tests to an exact upstream commit that supports Gemini, OpenRouter and Groq routes
 - add version-metadata consistency checks and a release-version helper so `package.json`, `package-lock.json` and the public CLI version stay synchronized
 - keep Dependabot minor/patch updates grouped while deferring known v1-breaking dependency majors for explicit runtime/toolchain work
@@ -31,7 +32,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - document custom and local Claude Code gateways, including a successfully tested Claude Code Router → llama.cpp → Qwen3.8-27B setup
 - clarify that reported cost values may be estimated, synthetic or otherwise unrelated to real billing when a proxy or local model is used
 - document local and GitHub Actions live E2E setup, authentication, cost and trust boundaries
-- document the Gemini-first free-provider live E2E path and the distinction between provider-capacity fallback and real Canary regression failures
+- document the Gemini-first free-provider live E2E path and the distinction between provider-capacity/availability fallback and real Canary regression failures
 - document the exact-commit `full` live E2E release gate, version preparation, npm bootstrap publication, automatic GitHub Release creation, and Trusted Publishing workflow
 
 ## [1.0.0] - 2026-08-27
