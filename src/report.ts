@@ -18,13 +18,13 @@ export function formatRun(result: RunResult): string {
   const lines = [
     `Claude Code Canary — ${result.scenario}`,
     '',
-    `Result:       ${result.passed ? 'PASS' : 'FAIL'}`,
-    `Executable:   ${result.executable}`,
-    `Tool calls:   ${result.metrics.toolCalls}`,
-    `Total tokens: ${tokens(result.metrics.totalTokens)}`,
-    `Cost:         ${cost(result.metrics.costUsd)}`,
-    `Duration:     ${duration(result.durationMs)}`,
-    `Changed:      ${result.changedFiles.length} file(s)`,
+    `Result:        ${result.passed ? 'PASS' : 'FAIL'}`,
+    `Executable:    ${result.executable}`,
+    `Tool calls:    ${result.metrics.toolCalls}`,
+    `Total tokens:  ${tokens(result.metrics.totalTokens)}`,
+    `Reported cost: ${cost(result.metrics.costUsd)}`,
+    `Duration:      ${duration(result.durationMs)}`,
+    `Changed:       ${result.changedFiles.length} file(s)`,
   ];
 
   if (result.failures.length > 0) {
@@ -40,7 +40,7 @@ export function formatComparison(baseline: RunResult, candidate: RunResult): str
     ['Result', baseline.passed ? 'PASS' : 'FAIL', candidate.passed ? 'PASS' : 'FAIL'],
     ['Tool calls', String(baseline.metrics.toolCalls), String(candidate.metrics.toolCalls)],
     ['Total tokens', tokens(baseline.metrics.totalTokens), tokens(candidate.metrics.totalTokens)],
-    ['Cost', cost(baseline.metrics.costUsd), cost(candidate.metrics.costUsd)],
+    ['Reported cost', cost(baseline.metrics.costUsd), cost(candidate.metrics.costUsd)],
     ['Duration', duration(baseline.durationMs), duration(candidate.durationMs)],
   ];
 
