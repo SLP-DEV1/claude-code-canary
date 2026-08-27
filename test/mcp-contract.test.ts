@@ -168,6 +168,13 @@ describe('MCP contract testing', () => {
       expect(comparison.breakingChanges.join('\n')).toContain('prompts: removed summarize');
       expect(comparison.breakingChanges.join('\n')).toContain('capabilities: tools.listChanged was removed or disabled');
       expect(comparison.nonBreakingChanges.join('\n')).toContain('tools: added new_tool');
+
+      const withoutToolsCapability: McpContractSnapshot = {
+        ...baseline,
+        capabilities: Object.fromEntries(Object.entries(baseline.capabilities).filter(([name]) => name !== 'tools')),
+      };
+      const capabilityComparison = compareMcpSnapshots(baseline, withoutToolsCapability);
+      expect(capabilityComparison.breakingChanges.join('\n')).toContain('capabilities: tools was removed');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

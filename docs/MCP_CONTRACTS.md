@@ -135,7 +135,7 @@ Reported as informational by default:
 - newly enabled capabilities
 - negotiated protocol-version changes
 
-The distinction keeps additive server growth from failing CI while still surfacing it in the report.
+The distinction keeps additive server growth from failing CI while still surfacing it in the report. Removing an entire advertised top-level capability is breaking even when that capability had no boolean sub-flags.
 
 ## Tool safety assertions
 
@@ -176,3 +176,5 @@ A declared `listChanged` capability is independently assertable in the contract.
 ```
 
 Commit the `.mcp.yml` file and its reviewed baseline. Do not commit credentials into the contract; reference only non-secret test-mode environment values and inject real secrets through the CI environment if the server truly needs them.
+
+An MCP contract can launch an arbitrary local command. Treat contract files and the referenced server code as executable trusted CI input, just like Canary scenarios and build scripts. Do not run untrusted fork contracts with privileged environment credentials.

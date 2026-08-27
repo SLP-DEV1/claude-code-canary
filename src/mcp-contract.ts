@@ -574,13 +574,26 @@ export function compareMcpSnapshots(baseline: McpContractSnapshot, candidate: Mc
   compareCollections('resource_templates', baseline.resourceTemplates, candidate.resourceTemplates, (template) => template.uriTemplate,
     (template) => ({ mimeType: template.mimeType }), breakingChanges, nonBreakingChanges);
 
+  const beforeTopCapabilities = new Set(Object.keys(baseline.capabilities));
+  const afterTopCapabilities = new Set(Object.keys(candidate.capabilities));
+  for (const name of beforeTopCapabilities) {
+    if (!afterTopCapabilities.has(name)) breakingChanges.push(`capabilities: ${name} was removed.`);
+  }
+  for (const name of afterTopCapabilities) {
+    if (!beforeTopCapabilities.has(name)) nonBreakingChanges.push(`capabilities: ${name} was added.`);
+  }
+
   const beforeCapabilities = flattenBooleanCapabilities(baseline.capabilities);
   const afterCapabilities = flattenBooleanCapabilities(candidate.capabilities);
   for (const [name, value] of beforeCapabilities) {
+    const root = name.split('.', 1)[0];
+    if (!afterTopCapabilities.has(root)) continue;
     const current = afterCapabilities.get(name);
     if (value === true && current !== true) breakingChanges.push(`capabilities: ${name} was removed or disabled.`);
   }
   for (const [name, value] of afterCapabilities) {
+    const root = name.split('.', 1)[0];
+    if (!beforeTopCapabilities.has(root)) continue;
     if (value === true && beforeCapabilities.get(name) !== true) nonBreakingChanges.push(`capabilities: ${name} was added or enabled.`);
   }
   if (baseline.protocolVersion !== candidate.protocolVersion) {
