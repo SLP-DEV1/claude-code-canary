@@ -194,6 +194,6 @@ jobs:
             echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
             echo "- Provider: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
             echo "- Model: \`${{ steps.provider.outputs.model || 'not completed' }}\`"
-            echo "- OpenRouter fallback used: \`${{ steps.provider.outputs.fallback-used || 'false' }}\`"
+            echo "- OpenRouter fallback used: \`${{ steps.provider.outputs['fallback-used'] || 'false' }}\`"
             echo "- CLI fixture results: \`${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results\`"
           } >> "$GITHUB_STEP_SUMMARY"
