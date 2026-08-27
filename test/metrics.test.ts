@@ -19,24 +19,30 @@ describe('stream metrics', () => {
     expect(metrics.permissionDenied).toBe(0);
   });
 
-  it('preserves hook order and captures permission semantics', () => {
+  it('preserves the order of real hook_started lifecycle messages', () => {
     const stream = [
-      JSON.stringify({ type: 'system', hook_event_name: 'PreToolUse', permission_mode: 'auto', tool_name: 'Read', tool_use_id: 'tool-1' }),
-      JSON.stringify({ type: 'system', hook_event_name: 'PermissionRequest', permission_mode: 'auto', tool_name: 'Read', tool_use_id: 'tool-1' }),
-      JSON.stringify({ type: 'system', hook_event_name: 'PostToolUse', permission_mode: 'auto', tool_name: 'Read', tool_use_id: 'tool-1' }),
-      JSON.stringify({ type: 'system', hook_event_name: 'PermissionDenied', permission_mode: 'auto', tool_name: 'Bash', tool_use_id: 'tool-2' }),
+      JSON.stringify({ type: 'system', subtype: 'hook_started', hook_id: 'h1', hook_name: 'project-pre', hook_event: 'PreToolUse' }),
+      JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h1', hook_name: 'project-pre', hook_event: 'PreToolUse', exit_code: 0 }),
+      JSON.stringify({ type: 'system', subtype: 'hook_started', hook_id: 'h2', hook_name: 'project-post', hook_event: 'PostToolUse' }),
     ].join('\n');
 
     const metrics = parseStreamMetrics(stream);
-    expect(metrics.hookEventSequence).toEqual(['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PermissionDenied']);
-    expect(metrics.hookEvents).toEqual(['PermissionDenied', 'PermissionRequest', 'PostToolUse', 'PreToolUse']);
-    expect(metrics.permissionPrompts).toBe(1);
-    expect(metrics.permissionDenied).toBe(1);
-    expect(metrics.permissionRequests).toEqual([{
-      toolName: 'Read',
-      toolUseId: 'tool-1',
-      permissionMode: 'auto',
-    }]);
+    expect(metrics.hookEventSequence).toEqual(['PreToolUse', 'PostToolUse']);
+    expect(metrics.hookEvents).toEqual(['PostToolUse', 'PreToolUse', 'project-post', 'project-pre']);
+    expect(metrics.permissionPrompts).toBe(0);
+    expect(metrics.permissionDenied).toBe(0);
+  });
+
+  it('does not mistake raw hook stdin fields for stream lifecycle messages', () => {
+    const metrics = parseStreamMetrics(JSON.stringify({
+      type: 'system',
+      hook_event_name: 'PermissionRequest',
+      permission_mode: 'default',
+      tool_name: 'Bash',
+    }));
+
+    expect(metrics.hookEventSequence).toEqual([]);
+    expect(metrics.permissionPrompts).toBe(0);
   });
 
   it('tolerates non-json diagnostic lines', () => {
