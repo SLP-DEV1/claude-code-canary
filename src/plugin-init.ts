@@ -1,11 +1,12 @@
 import { access, lstat, mkdir, opendir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
+import { discoverExtendedPluginSurfaces, type PluginDependency, type PluginLspServer, type PluginMonitor } from './plugin-surfaces.js';
 
 const PLUGIN_NAME_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const MARKER_FILE = '.claude-canary-plugin-init';
 
-export type PluginComponentKind = 'command' | 'agent' | 'skill' | 'hook' | 'mcp';
+export type PluginComponentKind = 'command' | 'agent' | 'skill' | 'hook' | 'mcp' | 'lsp';
 
 export interface PluginComponent {
   kind: PluginComponentKind;
@@ -25,6 +26,9 @@ export interface PluginDiscovery {
   skills: PluginComponent[];
   hooks: PluginComponent[];
   mcpServers: PluginComponent[];
+  lspServers: PluginLspServer[];
+  monitors: PluginMonitor[];
+  dependencies: PluginDependency[];
   warnings: string[];
 }
 
@@ -54,6 +58,10 @@ interface PluginManifest extends Record<string, unknown> {
   agents?: unknown;
   hooks?: unknown;
   mcpServers?: unknown;
+  lspServers?: unknown;
+  dependencies?: unknown;
+  monitors?: unknown;
+  experimental?: unknown;
 }
 
 function normalize(value: string): string {
@@ -61,7 +69,12 @@ function normalize(value: string): string {
 }
 
 function safeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'component';
+  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  let start = 0;
+  while (start < normalized.length && normalized.charCodeAt(start) === 45) start += 1;
+  let end = normalized.length;
+  while (end > start && normalized.charCodeAt(end - 1) === 45) end -= 1;
+  return normalized.slice(start, Math.min(end, start + 80)) || 'component';
 }
 
 async function exists(target: string): Promise<boolean> {
@@ -311,14 +324,16 @@ export async function discoverPlugin(pluginPath: string): Promise<PluginDiscover
   const skills = await collectSkills(root);
   const hooks = await collectHooks(root, manifest);
   const mcpServers = await collectMcp(root, manifest);
+  const extended = await discoverExtendedPluginSurfaces(root, manifest);
   const warnings = [
     ...duplicateNameWarnings(commands, 'command'),
     ...duplicateNameWarnings(agents, 'agent'),
     ...duplicateNameWarnings(skills, 'skill'),
+    ...extended.warnings,
   ];
 
-  if (commands.length + agents.length + skills.length + hooks.length + mcpServers.length === 0) {
-    warnings.push('No commands, agents, skills, hooks or MCP servers were discovered.');
+  if (commands.length + agents.length + skills.length + hooks.length + mcpServers.length + extended.lspServers.length + extended.monitors.length + extended.dependencies.length === 0) {
+    warnings.push('No commands, agents, skills, hooks, MCP servers, LSP servers, monitors or plugin dependencies were discovered.');
   }
 
   return {
@@ -331,6 +346,9 @@ export async function discoverPlugin(pluginPath: string): Promise<PluginDiscover
     skills,
     hooks,
     mcpServers,
+    lspServers: extended.lspServers,
+    monitors: extended.monitors,
+    dependencies: extended.dependencies,
     warnings,
   };
 }
@@ -396,9 +414,17 @@ function scenarioForComponent(plugin: string, component: PluginComponent): Recor
       true,
     );
   }
+  if (component.kind === 'mcp') {
+    return baseScenario(
+      `plugin-${plugin}-mcp-${id}`,
+      `Smoke-test the Claude Code plugin ${plugin}. Confirm that the MCP server ${component.name} connects and, if it exposes a clearly read-only discovery/list/status tool, call one harmless tool. Do not perform mutations and do not modify repository files. Report connection, startup or tool-discovery errors.`,
+    );
+  }
   return baseScenario(
-    `plugin-${plugin}-mcp-${id}`,
-    `Smoke-test the Claude Code plugin ${plugin}. Confirm that the MCP server ${component.name} connects and, if it exposes a clearly read-only discovery/list/status tool, call one harmless tool. Do not perform mutations and do not modify repository files. Report connection, startup or tool-discovery errors.`,
+    `plugin-${plugin}-lsp-${id}`,
+    `Smoke-test the Claude Code plugin ${plugin}. Confirm that the LSP server ${component.name} registers without startup errors. If a matching source file exists, use only read-only LSP navigation such as hover, symbols or definition lookup. Do not modify repository files. Report missing executables, registration failures or unavailable LSP tooling.`,
+    false,
+    ['Executable not found', 'No LSP server available'],
   );
 }
 
@@ -448,6 +474,7 @@ export async function generatePluginScenarios(pluginPath: string, options: Plugi
     ['skill', discovery.skills],
     ['hook', discovery.hooks],
     ['mcp', discovery.mcpServers],
+    ['lsp', discovery.lspServers],
   ];
   for (const [kind, components] of groups) {
     for (const component of components) {
@@ -467,6 +494,7 @@ export async function generatePluginScenarios(pluginPath: string, options: Plugi
     `Run one scenario against recent Claude Code releases:\n\n` +
     `\`\`\`bash\nclaude-canary plugin-matrix ${normalize(path.relative(cwd, loadPath))} --plugin ${normalize(path.relative(cwd, discovery.pluginRoot) || '.')} --last 10\n\`\`\`\n\n` +
     `Generated scenarios: **${scenarios.length}**\n\n` +
+    `Static compatibility surfaces: **${discovery.monitors.length} monitor(s)**, **${discovery.dependencies.length} plugin dependency declaration(s)**. Monitors are discovered and validated but never started by Canary; dependency declarations are tracked as static contracts.\n\n` +
     scenarios.map((scenario) => `- \`${scenario.path}\`${scenario.component ? ` — ${scenario.kind}: ${scenario.component}` : ' — plugin load'}`).join('\n') + '\n';
   await writeFile(path.join(outputDir, 'README.md'), readme, 'utf8');
 

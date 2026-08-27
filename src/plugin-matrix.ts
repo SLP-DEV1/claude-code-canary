@@ -56,7 +56,12 @@ export interface RunPluginMatrixOptions {
 }
 
 function safeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'plugin';
+  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  let start = 0;
+  while (start < normalized.length && normalized.charCodeAt(start) === 45) start += 1;
+  let end = normalized.length;
+  while (end > start && normalized.charCodeAt(end - 1) === 45) end -= 1;
+  return normalized.slice(start, Math.min(end, start + 80)) || 'plugin';
 }
 
 function normalizeRelative(value: string): string {

@@ -87,6 +87,34 @@ describe('plugin smoke generator', () => {
     expect(discovery.pluginRoot).toContain('demo-plugin');
   });
 
+
+  it('exposes LSP, monitor and dependency declarations through plugin discovery', async () => {
+    const root = await tempRoot();
+    const plugin = path.join(root, 'extended-plugin');
+    await mkdir(path.join(plugin, '.claude-plugin'), { recursive: true });
+    await mkdir(path.join(plugin, 'monitors'), { recursive: true });
+    await writeFile(path.join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify({
+      name: 'extended-plugin',
+      dependencies: [{ name: 'shared-tools', version: '~2.1.0' }],
+    }), 'utf8');
+    await writeFile(path.join(plugin, '.lsp.json'), JSON.stringify({
+      typescript: { command: 'typescript-language-server', args: ['--stdio'], extensionToLanguage: { '.ts': 'typescript' } },
+    }), 'utf8');
+    await writeFile(path.join(plugin, 'monitors', 'monitors.json'), JSON.stringify([
+      { name: 'errors', command: 'tail -F errors.log', description: 'Error stream' },
+    ]), 'utf8');
+    const found = await discoverPlugin(plugin);
+    expect(found.lspServers.map((entry) => entry.name)).toEqual(['typescript']);
+    expect(found.monitors.map((entry) => entry.name)).toEqual(['errors']);
+    expect(found.dependencies).toEqual([{ name: 'shared-tools', version: '~2.1.0' }]);
+
+    const project = path.join(root, 'project');
+    await mkdir(project, { recursive: true });
+    const generated = await generatePluginScenarios(plugin, { cwd: project });
+    expect(generated.scenarios.some((entry) => entry.kind === 'lsp' && entry.component === 'typescript')).toBe(true);
+    expect(generated.scenarios.some((entry) => entry.kind === ('monitor' as never))).toBe(false);
+  });
+
   it('requires safe ./ manifest component paths', async () => {
     const root = await tempRoot();
     const plugin = path.join(root, 'bad-plugin');
