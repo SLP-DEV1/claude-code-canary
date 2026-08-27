@@ -5,8 +5,8 @@ import type { Scenario } from './config.js';
 import type { PermissionRequestTrace, RunMetrics } from './types.js';
 
 const PLUGIN_NAME = 'canaryprobe';
-const MCP_SERVER_NAME = 'permissions';
-export const PERMISSION_PROMPT_TOOL = `mcp__plugin_${PLUGIN_NAME}_${MCP_SERVER_NAME}__permission_request`;
+const MCP_SERVER_NAME = 'canary_permissions';
+export const PERMISSION_PROMPT_TOOL = `mcp__${MCP_SERVER_NAME}__permission_request`;
 
 export interface PermissionProbeMetrics {
   permissionPrompts: number;
@@ -183,33 +183,37 @@ export async function preparePermissionProbe(scenario: Scenario): Promise<Prepar
   if (!promptProbe && !deniedProbe) return undefined;
 
   const runtimeDir = await mkdtemp(path.join(tmpdir(), 'claude-canary-permissions-'));
-  const manifestDir = path.join(runtimeDir, '.claude-plugin');
   const scriptsDir = path.join(runtimeDir, 'scripts');
-  const hooksDir = path.join(runtimeDir, 'hooks');
-  await Promise.all([mkdir(manifestDir, { recursive: true }), mkdir(scriptsDir, { recursive: true }), mkdir(hooksDir, { recursive: true })]);
-
-  await writeFile(path.join(manifestDir, 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, version: '1.0.0', description: 'Ephemeral Claude Canary permission instrumentation' }, null, 2)}\n`, 'utf8');
+  await mkdir(scriptsDir, { recursive: true });
 
   const promptTrace = path.join(runtimeDir, 'permission-prompts.jsonl');
   const deniedTrace = path.join(runtimeDir, 'permission-denied.jsonl');
-  const extraClaudeArgs = ['--plugin-dir', runtimeDir];
+  const extraClaudeArgs: string[] = [];
   const env: NodeJS.ProcessEnv = {};
 
   if (promptProbe) {
     const serverScript = path.join(scriptsDir, 'permission-server.cjs');
+    const mcpConfig = path.join(runtimeDir, 'mcp.json');
     await writeFile(serverScript, permissionServerSource(), 'utf8');
-    await writeFile(path.join(runtimeDir, '.mcp.json'), `${JSON.stringify({ mcpServers: { [MCP_SERVER_NAME]: { command: process.execPath, args: [serverScript] } } }, null, 2)}\n`, 'utf8');
+    await writeFile(mcpConfig, `${JSON.stringify({ mcpServers: { [MCP_SERVER_NAME]: { command: process.execPath, args: [serverScript] } } }, null, 2)}\n`, 'utf8');
     await writeFile(promptTrace, '', 'utf8');
     env.CLAUDE_CANARY_PERMISSION_PROMPT_TRACE = promptTrace;
-    extraClaudeArgs.push('--permission-prompt-tool', PERMISSION_PROMPT_TOOL);
+    // Use an explicit --mcp-config instead of a plugin-bundled MCP server so the
+    // probe remains available when the tested scenario uses --strict-mcp-config.
+    extraClaudeArgs.push('--mcp-config', mcpConfig, '--permission-prompt-tool', PERMISSION_PROMPT_TOOL);
   }
 
   if (deniedProbe) {
+    const manifestDir = path.join(runtimeDir, '.claude-plugin');
+    const hooksDir = path.join(runtimeDir, 'hooks');
+    await Promise.all([mkdir(manifestDir, { recursive: true }), mkdir(hooksDir, { recursive: true })]);
+    await writeFile(path.join(manifestDir, 'plugin.json'), `${JSON.stringify({ name: PLUGIN_NAME, version: '1.0.0', description: 'Ephemeral Claude Canary permission instrumentation' }, null, 2)}\n`, 'utf8');
     const hookScript = path.join(scriptsDir, 'permission-denied.cjs');
     await writeFile(hookScript, deniedHookSource(), 'utf8');
     await writeFile(path.join(hooksDir, 'hooks.json'), `${JSON.stringify({ hooks: { PermissionDenied: [{ hooks: [{ type: 'command', command: process.execPath, args: [hookScript] }] }] } }, null, 2)}\n`, 'utf8');
     await writeFile(deniedTrace, '', 'utf8');
     env.CLAUDE_CANARY_PERMISSION_DENIED_TRACE = deniedTrace;
+    extraClaudeArgs.push('--plugin-dir', runtimeDir);
   }
 
   return {
