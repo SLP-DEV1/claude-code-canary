@@ -40,6 +40,15 @@ const regressionThresholds = z.object({
   require_same_hook_sequence: z.boolean().default(false),
 }).strict();
 
+const stabilityPolicy = z.object({
+  min_pass_rate: z.number().min(0).max(1).default(0.9),
+  max_changed_file_variants: z.number().int().min(1).default(1),
+  max_hook_sequence_variants: z.number().int().min(1).optional(),
+  max_permission_sequence_variants: z.number().int().min(1).optional(),
+  max_total_tokens_cv: z.number().nonnegative().optional(),
+  max_tool_calls_cv: z.number().nonnegative().optional(),
+}).strict();
+
 const recordingMetadata = z.object({
   git_commit: z.string().regex(/^[0-9a-f]{40}$/i),
   recorded_at: z.string().min(1),
@@ -54,6 +63,10 @@ export const ScenarioSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
   prompt: z.string().min(1),
+  tags: z.array(z.string().min(1)).default([]),
+  affects: z.array(z.string().min(1)).default([]),
+  always_run: z.boolean().default(false),
+  stability: stabilityPolicy.optional(),
   setup: commandGroup.optional(),
   claude: z.object({
     executable: z.string().min(1).default('claude'),
