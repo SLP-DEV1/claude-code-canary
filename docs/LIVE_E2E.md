@@ -24,24 +24,28 @@ Unit tests and CLI smoke tests are necessary, but they cannot detect upstream Cl
 - `plugin-suite` against the newest published Claude Code release
 - a self-test of the repository's composite GitHub Action in `run` mode
 
-The generated fixture is deliberately tiny. Write-capable scenarios use `bypassPermissions` only inside the disposable fixture and assert that Claude changes exactly the requested file. Generated plugin tests remain read-only.
+The generated fixture is deliberately tiny. Write-capable scenarios use `bypassPermissions` only inside the disposable fixture and assert that Claude changes exactly the requested file. Generated plugin tests remain read-only. The live harness raises generated plugin scenarios from their normal 80,000-token guardrail to 160,000 tokens because current Claude Code system/tool context can legitimately exceed the normal smoke-test budget.
 
 ## Free-provider GitHub Actions path
 
-The repository's scheduled/manual workflow does **not** require an Anthropic subscription or Anthropic API key. It keeps the real Claude Code CLI but routes its model traffic through a small headless Anthropic-to-OpenAI compatibility proxy.
+The repository's scheduled/manual workflow does **not** require an Anthropic subscription or Anthropic API key. It keeps the real Claude Code CLI but routes its model traffic through a small headless compatibility proxy.
 
-Provider order:
+Preferred provider path:
 
-1. **Groq** using `openai/gpt-oss-120b`
-2. **OpenRouter** using `openrouter/free` only when Groq reports a recognizable rate/quota limit
+1. **Gemini** using stable `gemini-2.5-flash-lite` when `GEMINI_API_KEY` is configured
+2. **OpenRouter** using `openrouter/free` only when the selected primary reports a recognizable rate/quota/capacity limit
 
-The workflow intentionally does not retry ordinary Canary failures through OpenRouter. A broken assertion, Claude CLI incompatibility, plugin failure, malformed stream, or other non-rate-limit failure remains red. This prevents fallback from hiding real regressions.
+For backward compatibility, Groq remains supported when no Gemini key is configured. In that case `openai/gpt-oss-120b` is attempted before the same OpenRouter capacity fallback. If only OpenRouter is configured, the wrapper starts directly on OpenRouter.
 
-Groq is treated as the primary provider because `openai/gpt-oss-120b` supports tool use and has a large enough output allowance for current Claude Code headless requests. The Groq free tier can still be too small for Claude Code's large prompt/token footprint, so recognized rate/quota failures are expected to fall back rather than being mistaken for Canary regressions. OpenRouter's free-model router may select different free models over time, so a fallback run is useful for transport/CLI compatibility but is less model-deterministic than the Groq primary route.
+Gemini is preferred for hosted free E2E because Gemini 2.5 Flash-Lite has a 1,048,576-token input window, a 65,536-token output window and function calling. Current Claude Code headless requests can contain tens of thousands of input tokens before the task itself begins. By contrast, observed Groq Free runs have hit the provider's input-token-per-minute allowance before Claude can execute the first task. Groq is therefore retained as a compatibility path rather than the recommended hosted primary.
 
-The headless proxy is `claude-code-agent-sdk-router`, pinned in the workflow to commit `47e06284af53a6bef86bba0f411977b92db82440`. The workflow checks out that exact commit, installs dependencies with lifecycle scripts disabled, builds it, and uses only local `127.0.0.1` proxy traffic between Claude Code and the router.
+The workflow intentionally does not retry ordinary Canary failures through another provider. A broken assertion, Claude CLI incompatibility, plugin failure, malformed stream, tool-protocol error, or other non-capacity failure remains red. This prevents fallback from hiding real regressions.
 
-Provider keys are referenced from environment variables. Generated router config files contain `$GROQ_API_KEY` or `$OPENROUTER_API_KEY`, never the secret value itself.
+OpenRouter's free-model router may select different free models over time, so a fallback run is useful for transport/CLI compatibility but is less model-deterministic than the Gemini primary route. Free-provider quotas can change; inspect the provider's own quota dashboard when a capacity failure occurs.
+
+The headless proxy is `claude-code-agent-sdk-router`, pinned in the workflow to commit `47e06284af53a6bef86bba0f411977b92db82440`. That exact router revision already supports Gemini, OpenRouter and Groq routes. The workflow checks out that exact commit, installs dependencies with lifecycle scripts disabled, builds it, and uses only local `127.0.0.1` proxy traffic between Claude Code and the router.
+
+Provider keys are referenced from environment variables. Generated router config files contain `$GEMINI_API_KEY`, `$GROQ_API_KEY` or `$OPENROUTER_API_KEY`, never the secret value itself.
 
 ## Run locally with an already working Claude setup
 
@@ -75,24 +79,33 @@ Useful environment variables:
 
 A failed run always retains the fixture path in its output for inspection.
 
-## Run locally with Groq/OpenRouter
+## Run locally with free providers
 
-The provider wrapper expects a built `ccasr` CLI through `CLAUDE_CANARY_CCASR_CLI`. Configure at least one provider key:
+The provider wrapper expects a built `ccasr` CLI through `CLAUDE_CANARY_CCASR_CLI`. Configure at least one provider key. Gemini plus OpenRouter fallback is the recommended hosted combination:
+
+```bash
+export GEMINI_API_KEY=...
+export OPENROUTER_API_KEY=...   # optional capacity fallback
+export CLAUDE_CANARY_CCASR_CLI=/path/to/claude-code-agent-sdk-router/dist/cli.js
+node scripts/live-provider-e2e.mjs run core
+```
+
+Groq remains supported for existing setups:
 
 ```bash
 export GROQ_API_KEY=...
-export OPENROUTER_API_KEY=...   # optional fallback
-export CLAUDE_CANARY_CCASR_CLI=/path/to/claude-code-agent-sdk-router/dist/cli.js
+export OPENROUTER_API_KEY=...   # optional capacity fallback
 node scripts/live-provider-e2e.mjs run core
 ```
 
 Optional model overrides:
 
+- `CLAUDE_CANARY_GEMINI_MODEL` defaults to `gemini-2.5-flash-lite`
 - `CLAUDE_CANARY_GROQ_MODEL` defaults to `openai/gpt-oss-120b`
 - `CLAUDE_CANARY_OPENROUTER_MODEL` defaults to `openrouter/free`
 - `CLAUDE_CANARY_PROVIDER_PORT` defaults to `3456`
 
-If only `OPENROUTER_API_KEY` exists, the wrapper starts directly on OpenRouter. If both exist, Groq is always attempted first.
+When Gemini is configured it is preferred. Groq is only selected as the primary when Gemini is absent. OpenRouter is used directly when it is the only configured provider, or as the capacity fallback from the selected primary.
 
 ## GitHub Actions
 
@@ -100,10 +113,11 @@ If only `OPENROUTER_API_KEY` exists, the wrapper starts directly on OpenRouter. 
 
 Configure repository Actions secrets:
 
-- `GROQ_API_KEY` — recommended primary
-- `OPENROUTER_API_KEY` — recommended fallback
+- `GEMINI_API_KEY` — recommended primary
+- `OPENROUTER_API_KEY` — recommended capacity fallback
+- `GROQ_API_KEY` — optional backward-compatible provider
 
-At least one is required for a manual run. With both configured, Groq is primary and OpenRouter is used only after a detected Groq `429`/rate/quota limit. If neither secret exists, a scheduled run records a clear skip notice instead of attempting model access. A **manual** run without provider authentication fails deliberately so a skipped manual run can never be mistaken for release evidence. No secret value is printed.
+At least one is required for a manual run. If no secret exists, a scheduled run records a clear skip notice instead of attempting model access. A **manual** run without provider authentication fails deliberately so a skipped manual run can never be mistaken for release evidence. No secret value is printed.
 
 Manual runs have an explicit run name:
 
@@ -114,7 +128,7 @@ Live Claude E2E (full)
 
 The `full` form is part of the v1.x release contract. `.github/workflows/release.yml` queries GitHub Actions before publication and requires a successful `Live Claude E2E (full)` run whose `head_sha` exactly matches the immutable release commit. A successful full run on an older or newer commit does not satisfy the gate.
 
-The workflow installs current Claude Code using Anthropic's Linux installer, builds the checked-out Canary commit, builds the pinned provider router, preserves live result/provider artifacts, and records the selected provider/model plus whether fallback was used in the GitHub Step Summary.
+The workflow installs current Claude Code using Anthropic's Linux installer, builds the checked-out Canary commit, builds the pinned provider router, preserves live result/provider artifacts, and records the primary provider, provider/model actually used and whether a capacity fallback was needed in the GitHub Step Summary.
 
 ## Cost and safety
 
