@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/baseline.schema.json",
+  "title": "Claude Code Canary Baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "scenarioSchemaVersion", "scenario", "sourceScenario", "scenarioHash", "createdAt", "gitCommit", "executable", "durationMs", "metrics"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "scenarioSchemaVersion": { "const": 1 },
+    "scenario": { "type": "string", "minLength": 1 },
+    "sourceScenario": { "type": "string", "minLength": 1 },
+    "scenarioHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "gitCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "executable": { "type": "string", "minLength": 1 },
+    "durationMs": { "type": "number", "minimum": 0 },
+    "metrics": {
+      "type": "object",
+      "required": ["toolCalls", "inputTokens", "outputTokens", "cacheReadTokens", "cacheCreationTokens", "totalTokens", "hookEvents", "parseErrors"],
+      "properties": {
+        "toolCalls": { "type": "integer", "minimum": 0 },
+        "inputTokens": { "type": "number", "minimum": 0 },
+        "outputTokens": { "type": "number", "minimum": 0 },
+        "cacheReadTokens": { "type": "number", "minimum": 0 },
+        "cacheCreationTokens": { "type": "number", "minimum": 0 },
+        "totalTokens": { "type": "number", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "turns": { "type": "number", "minimum": 0 },
+        "hookEvents": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "hookEventSequence": { "type": "array", "items": { "type": "string" } },
+        "permissionPrompts": { "type": "integer", "minimum": 0 },
+        "permissionDenied": { "type": "integer", "minimum": 0 },
+        "permissionRequests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "toolName": { "type": "string" },
+              "toolUseId": { "type": "string" },
+              "permissionMode": { "type": "string" }
+            }
+          }
+        },
+        "parseErrors": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
