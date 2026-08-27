@@ -28,7 +28,14 @@ async function fileExists(file: string): Promise<boolean> {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  for (const root of temporaryRoots.splice(0)) {
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === 'win32' ? 8 : 2,
+      retryDelay: 100,
+    });
+  }
 });
 
 describe('reproduction bundle safety', () => {
@@ -212,5 +219,5 @@ describe('reproduction bundle safety', () => {
       force: true,
     })).rejects.toThrow(/not marked as a Claude Code Canary repro bundle/i);
     expect(await readFile(path.join(unrelated, 'keep.txt'), 'utf8')).toBe('important\n');
-  });
+  }, 20_000);
 });
