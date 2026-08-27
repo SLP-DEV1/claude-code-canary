@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "claude-canary": "dist/index.js"
+    "claude-canary": "dist/v2-cli.js"
   },
   "files": [
     "dist",
@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx src/v2-cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc -p tsconfig.json --noEmit",
