@@ -69,7 +69,7 @@
   },
   "devDependencies": {
     "@openpgp/web-stream-tools": "0.3.1",
-    "@types/node": "24.13.3",
+    "@types/node": "26.2.0",
     "tsx": "4.23.12",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
