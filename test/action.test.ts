@@ -36,11 +36,11 @@ describe('Claude Canary GitHub Action', () => {
     expect(externalUses.every((value) => /@[0-9a-f]{40}$/.test(value ?? ''))).toBe(true);
   });
 
-  it('publishes the CLI as claude-canary', async () => {
+  it('publishes the CLI as claude-canary with a valid package version', async () => {
     const source = await readFile(new URL('../package.json', import.meta.url), 'utf8');
     const pkg = JSON.parse(source) as { bin?: Record<string, string>; version?: string };
 
     expect(pkg.bin).toEqual({ 'claude-canary': './dist/index.js' });
-    expect(pkg.version).toBe('1.0.0');
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   });
 });
