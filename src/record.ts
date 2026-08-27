@@ -243,6 +243,9 @@ export function buildRecordedScenario(
     version: 1,
     name: state.name,
     prompt: state.prompt,
+    tags: [],
+    affects: [],
+    always_run: false,
     setup: setupCommands.length > 0 ? { commands: setupCommands } : undefined,
     claude: {
       executable: state.claude.executable || 'claude',
