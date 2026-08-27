@@ -1,0 +1,31 @@
+name: Claude Canary — plugin compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Test plugin across recent Claude Code releases
+        uses: SLP-DEV1/claude-code-canary@v1
+        with:
+          mode: plugin-suite
+          plugin: ./my-plugin
+          last: 10
+          max-runs: 200
+          fail-on-incompatible: "true"
