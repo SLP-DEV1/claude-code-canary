@@ -125,7 +125,7 @@ runs:
       if: ${{ always() && inputs.upload-results == 'true' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
-        name: ${{ inputs.artifact-name != '' && inputs.artifact-name || steps.canary.outputs.artifact-name }}
+        name: ${{ inputs.artifact-name != '' && inputs.artifact-name || format('claude-canary-results-{0}-{1}', github.run_id, github.run_attempt) }}
         path: ${{ github.workspace }}/.canary/results/
         if-no-files-found: warn
         include-hidden-files: true
