@@ -40,8 +40,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
-      - name: Syntax-check live E2E driver
-        run: node --check scripts/live-e2e.mjs
+      - name: Syntax-check live E2E drivers
+        run: |
+          node --check scripts/live-e2e.mjs
+          node --check scripts/live-provider-e2e.mjs
       - name: Smoke-test public CLI commands
         shell: bash
         run: |
