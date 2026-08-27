@@ -62,4 +62,22 @@ describe('Claude invocation arguments', () => {
       '/tmp/plugin',
     ]);
   });
+
+  it('automatically enables lifecycle events when semantic assertions need them', () => {
+    const permissionScenario = parseScenario({
+      version: 1,
+      name: 'permission-semantics',
+      prompt: 'Read a file',
+      expect: { permissions: { max_prompts: 0 } },
+    });
+    const hookScenario = parseScenario({
+      version: 1,
+      name: 'hook-semantics',
+      prompt: 'Read a file',
+      regressions: { require_same_hook_sequence: true },
+    });
+
+    expect(buildClaudeArgs(permissionScenario)).toContain('--include-hook-events');
+    expect(buildClaudeArgs(hookScenario)).toContain('--include-hook-events');
+  });
 });
