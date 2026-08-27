@@ -20,9 +20,12 @@ export const SuiteSchema = z.object({
   name: z.string().min(1),
   include: z.array(z.string().min(1)).default([]),
   exclude: z.array(z.string().min(1)).default([]),
+  /** Tags applied to every scenario reached through include patterns. */
+  tags: z.array(z.string().min(1)).default([]),
   scenarios: z.array(SuiteEntrySchema).default([]),
   concurrency: z.number().int().min(1).max(32).default(1),
   fail_fast: z.boolean().default(false),
+  max_runs: z.number().int().min(1).max(10_000).default(500),
 }).strict().refine((value) => value.include.length > 0 || value.scenarios.length > 0, {
   message: 'A suite needs at least one include pattern or scenarios entry.',
 });
@@ -37,12 +40,24 @@ export interface ResolvedSuiteScenario {
   always: boolean;
 }
 
+export interface SkippedSuiteScenario {
+  path: string;
+  reason: 'tag' | 'unaffected' | 'shard';
+}
+
+export interface SuiteSelection {
+  discovered: ResolvedSuiteScenario[];
+  selected: ResolvedSuiteScenario[];
+  skipped: SkippedSuiteScenario[];
+}
+
 export interface SuiteRunOptions {
   cwd?: string;
   tag?: string;
   shard?: string;
   concurrency?: number;
   failFast?: boolean;
+  maxRuns?: number;
   changedPaths?: string[];
   executableOverride?: string;
   gitRefOverride?: string;
@@ -65,10 +80,12 @@ export interface SuiteRunResult {
   createdAt: string;
   passed: boolean;
   total: number;
+  discoveredTotal: number;
   passedCount: number;
   failedCount: number;
   infrastructureFailedCount: number;
   skippedBySelection: number;
+  skipped: SkippedSuiteScenario[];
   shard?: string;
   tag?: string;
   executable?: string;
@@ -133,7 +150,7 @@ function parseShard(value?: string): { index: number; total: number } | undefine
   return { index, total };
 }
 
-function mergeEntry(target: Map<string, ResolvedSuiteScenario>, file: string, entry: ScenarioSuiteEntry): void {
+function mergeEntry(target: Map<string, ResolvedSuiteScenario>, file: string, entry: { tags: string[]; affects: string[]; always: boolean }): void {
   const current = target.get(file) ?? { path: file, tags: [], affects: [], always: false };
   current.tags = [...new Set([...current.tags, ...entry.tags])].sort();
   current.affects = [...new Set([...current.affects, ...entry.affects])].sort();
@@ -141,11 +158,7 @@ function mergeEntry(target: Map<string, ResolvedSuiteScenario>, file: string, en
   target.set(file, current);
 }
 
-export async function resolveSuiteScenarios(
-  suite: ScenarioSuite,
-  options: Pick<SuiteRunOptions, 'cwd' | 'tag' | 'shard' | 'changedPaths'> = {},
-): Promise<ResolvedSuiteScenario[]> {
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+async function discoverSuiteCandidates(suite: ScenarioSuite, cwd: string): Promise<ResolvedSuiteScenario[]> {
   const files = await collectFiles(cwd);
   const selected = new Map<string, ResolvedSuiteScenario>();
   const excluded = (file: string) => suite.exclude.some((pattern) => minimatch(file, pattern, { dot: true }));
@@ -153,7 +166,7 @@ export async function resolveSuiteScenarios(
   for (const pattern of suite.include) {
     for (const file of files) {
       if (excluded(file) || !minimatch(file, pattern, { dot: true })) continue;
-      mergeEntry(selected, file, { path: pattern, tags: [], affects: [], always: true });
+      mergeEntry(selected, file, { tags: suite.tags, affects: [], always: false });
     }
   }
 
@@ -164,20 +177,67 @@ export async function resolveSuiteScenarios(
     }
   }
 
-  let resolved = [...selected.values()].sort((a, b) => a.path.localeCompare(b.path));
-  if (options.tag) resolved = resolved.filter((item) => item.tags.includes(options.tag!));
+  const candidates = [...selected.values()].sort((a, b) => a.path.localeCompare(b.path));
+  for (const candidate of candidates) {
+    const scenario = await loadScenario(path.resolve(cwd, candidate.path));
+    candidate.tags = [...new Set([...candidate.tags, ...scenario.tags])].sort();
+    candidate.affects = [...new Set([...candidate.affects, ...scenario.affects])].sort();
+    candidate.always = candidate.always || scenario.always_run;
+  }
+  return candidates;
+}
+
+export async function explainSuiteSelection(
+  suite: ScenarioSuite,
+  options: Pick<SuiteRunOptions, 'cwd' | 'tag' | 'shard' | 'changedPaths'> = {},
+): Promise<SuiteSelection> {
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const discovered = await discoverSuiteCandidates(suite, cwd);
+  const skipped: SkippedSuiteScenario[] = [];
+  let selected = [...discovered];
+
+  if (options.tag) {
+    const next: ResolvedSuiteScenario[] = [];
+    for (const item of selected) {
+      if (item.tags.includes(options.tag)) next.push(item);
+      else skipped.push({ path: item.path, reason: 'tag' });
+    }
+    selected = next;
+  }
 
   if (options.changedPaths) {
     const changed = options.changedPaths.map(normalizeRelative);
-    resolved = resolved.filter((item) => {
-      if (item.always || item.affects.length === 0) return true;
-      return changed.some((file) => item.affects.some((pattern) => minimatch(file, pattern, { dot: true })));
-    });
+    const next: ResolvedSuiteScenario[] = [];
+    for (const item of selected) {
+      const affected = item.always || item.affects.length === 0 || changed.some((file) => item.affects.some((pattern) => minimatch(file, pattern, { dot: true })));
+      if (affected) next.push(item);
+      else skipped.push({ path: item.path, reason: 'unaffected' });
+    }
+    selected = next;
   }
 
   const shard = parseShard(options.shard);
-  if (shard) resolved = resolved.filter((_item, index) => index % shard.total === shard.index - 1);
-  return resolved;
+  if (shard) {
+    const next: ResolvedSuiteScenario[] = [];
+    selected.forEach((item, index) => {
+      if (index % shard.total === shard.index - 1) next.push(item);
+      else skipped.push({ path: item.path, reason: 'shard' });
+    });
+    selected = next;
+  }
+
+  return {
+    discovered,
+    selected: selected.sort((a, b) => a.path.localeCompare(b.path)),
+    skipped: skipped.sort((a, b) => a.path.localeCompare(b.path) || a.reason.localeCompare(b.reason)),
+  };
+}
+
+export async function resolveSuiteScenarios(
+  suite: ScenarioSuite,
+  options: Pick<SuiteRunOptions, 'cwd' | 'tag' | 'shard' | 'changedPaths'> = {},
+): Promise<ResolvedSuiteScenario[]> {
+  return (await explainSuiteSelection(suite, options)).selected;
 }
 
 function safeSlug(value: string): string {
@@ -190,6 +250,7 @@ function formatSuiteMarkdown(result: SuiteRunResult): string {
     '',
     `**Result:** ${result.passed ? 'PASS' : 'FAIL'}`,
     `**Scenarios:** ${result.passedCount}/${result.total} passed`,
+    `**Discovered:** ${result.discoveredTotal}; skipped by selection/sharding: ${result.skippedBySelection}`,
   ];
   if (result.tag) lines.push(`**Tag:** \`${result.tag}\``);
   if (result.shard) lines.push(`**Shard:** \`${result.shard}\``);
@@ -197,6 +258,10 @@ function formatSuiteMarkdown(result: SuiteRunResult): string {
   for (const item of result.scenarios) {
     lines.push(`| \`${item.path}\` | ${item.passed ? 'PASS' : item.infrastructureError ? 'INFRA' : 'FAIL'} | ${item.fingerprint ? `\`${item.fingerprint.id}\`` : ''} |`);
     if (item.infrastructureError) lines.push(`\n> ${item.path}: ${item.infrastructureError.replace(/\n/g, ' ')}`);
+  }
+  if (result.skipped.length) {
+    lines.push('', '## Skipped', '');
+    for (const item of result.skipped) lines.push(`- \`${item.path}\` — ${item.reason}`);
   }
   if (result.failureClusters.length) {
     lines.push('', '## Failure clusters', '');
@@ -211,11 +276,12 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const absoluteSuitePath = path.resolve(cwd, suitePath);
   const suite = await loadSuite(absoluteSuitePath);
-  const allResolved = await resolveSuiteScenarios(suite, { cwd, tag: options.tag, changedPaths: options.changedPaths });
-  const resolved = options.shard
-    ? await resolveSuiteScenarios(suite, { cwd, tag: options.tag, changedPaths: options.changedPaths, shard: options.shard })
-    : allResolved;
+  const selection = await explainSuiteSelection(suite, { cwd, tag: options.tag, changedPaths: options.changedPaths, shard: options.shard });
+  const resolved = selection.selected;
   if (resolved.length === 0) throw new Error(`Suite ${suite.name} selected no scenarios.`);
+  const maxRuns = options.maxRuns ?? suite.max_runs;
+  if (!Number.isInteger(maxRuns) || maxRuns < 1) throw new Error('Suite maxRuns must be a positive integer.');
+  if (resolved.length > maxRuns) throw new Error(`Suite ${suite.name} selected ${resolved.length} scenarios, exceeding max run budget ${maxRuns}.`);
 
   const concurrency = Math.min(32, Math.max(1, options.concurrency ?? suite.concurrency));
   const failFast = options.failFast ?? suite.fail_fast;
@@ -255,7 +321,7 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, resolved.length) }, () => worker()));
-  const completed = results.filter(Boolean);
+  const completed = results.filter((item): item is SuiteScenarioResult => Boolean(item));
   const runResults = completed.flatMap((item) => item.result ? [item.result] : []);
   const infrastructureFailedCount = completed.filter((item) => item.infrastructureError).length;
   const failedCount = completed.filter((item) => !item.passed).length;
@@ -266,10 +332,12 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
     createdAt: new Date().toISOString(),
     passed: failedCount === 0 && completed.length === resolved.length,
     total: completed.length,
+    discoveredTotal: selection.discovered.length,
     passedCount: completed.filter((item) => item.passed).length,
     failedCount,
     infrastructureFailedCount,
-    skippedBySelection: Math.max(0, allResolved.length - resolved.length),
+    skippedBySelection: selection.skipped.length,
+    skipped: selection.skipped,
     shard: options.shard,
     tag: options.tag,
     executable: options.executableOverride,
@@ -288,6 +356,41 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
     await writeFile(result.markdownArtifactPath, formatSuiteMarkdown(result), 'utf8');
   }
   return result;
+}
+
+export function combineSuiteResults(results: SuiteRunResult[]): SuiteRunResult {
+  if (!results.length) throw new Error('At least one suite result is required.');
+  const first = results[0];
+  for (const result of results) {
+    if (result.suite !== first.suite || result.suitePath !== first.suitePath) throw new Error('Cannot combine results from different suites.');
+  }
+  const scenariosByPath = new Map<string, SuiteScenarioResult>();
+  for (const result of results) {
+    for (const scenario of result.scenarios) {
+      if (scenariosByPath.has(scenario.path)) throw new Error(`Duplicate scenario across suite shards: ${scenario.path}`);
+      scenariosByPath.set(scenario.path, scenario);
+    }
+  }
+  const scenarios = [...scenariosByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+  const runResults = scenarios.flatMap((item) => item.result ? [item.result] : []);
+  const failedCount = scenarios.filter((item) => !item.passed).length;
+  const infrastructureFailedCount = scenarios.filter((item) => item.infrastructureError).length;
+  return {
+    schemaVersion: 1,
+    suite: first.suite,
+    suitePath: first.suitePath,
+    createdAt: new Date().toISOString(),
+    passed: failedCount === 0,
+    total: scenarios.length,
+    discoveredTotal: Math.max(...results.map((result) => result.discoveredTotal)),
+    passedCount: scenarios.filter((item) => item.passed).length,
+    failedCount,
+    infrastructureFailedCount,
+    skippedBySelection: 0,
+    skipped: [],
+    scenarios,
+    failureClusters: clusterRunFailures(runResults),
+  };
 }
 
 export { formatSuiteMarkdown, parseShard };
