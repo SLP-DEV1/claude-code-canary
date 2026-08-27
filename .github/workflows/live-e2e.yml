@@ -28,8 +28,10 @@ jobs:
     timeout-minutes: 60
     env:
       E2E_MODE: ${{ github.event_name == 'schedule' && 'core' || inputs.mode }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      CLAUDE_CANARY_GEMINI_MODEL: gemini-2.5-flash-lite
       CLAUDE_CANARY_GROQ_MODEL: openai/gpt-oss-120b
       CLAUDE_CANARY_OPENROUTER_MODEL: openrouter/free
 
@@ -54,11 +56,11 @@ jobs:
         id: auth
         shell: bash
         run: |
-          if [[ -n "${GROQ_API_KEY:-}" || -n "${OPENROUTER_API_KEY:-}" ]]; then
+          if [[ -n "${GEMINI_API_KEY:-}" || -n "${GROQ_API_KEY:-}" || -n "${OPENROUTER_API_KEY:-}" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Live Claude E2E skipped: configure GROQ_API_KEY and/or OPENROUTER_API_KEY as Actions secrets."
+            echo "::notice::Live Claude E2E skipped: configure GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY as Actions secrets."
           fi
 
       - name: Explain skipped scheduled live test
@@ -68,15 +70,15 @@ jobs:
           {
             echo "### Live Claude E2E skipped"
             echo
-            echo "Configure \`GROQ_API_KEY\` for the primary free provider and optionally \`OPENROUTER_API_KEY\` for fallback."
-            echo "Scheduled runs intentionally stay green when neither provider key is configured."
+            echo "Configure \`GEMINI_API_KEY\` for the preferred free provider and optionally \`OPENROUTER_API_KEY\` for fallback. \`GROQ_API_KEY\` remains supported for existing setups."
+            echo "Scheduled runs intentionally stay green when no provider key is configured."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Reject manual live test without provider auth
         if: github.event_name == 'workflow_dispatch' && steps.auth.outputs.configured != 'true'
         shell: bash
         run: |
-          echo "::error::Manual Live Claude E2E requires GROQ_API_KEY and/or OPENROUTER_API_KEY. A skipped manual run must never count as release evidence."
+          echo "::error::Manual Live Claude E2E requires GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY. A skipped manual run must never count as release evidence."
           exit 1
 
       - name: Install dependencies and build Canary
@@ -206,8 +208,9 @@ jobs:
             echo "- Release-evidence run name: \`Live Claude E2E ($E2E_MODE)\`"
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
-            echo "- Provider: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
+            echo "- Primary provider: \`${{ steps.provider.outputs['primary-provider'] || 'not completed' }}\`"
+            echo "- Provider used: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
             echo "- Model: \`${{ steps.provider.outputs.model || 'not completed' }}\`"
-            echo "- OpenRouter fallback used: \`${{ steps.provider.outputs['fallback-used'] || 'false' }}\`"
+            echo "- Capacity fallback used: \`${{ steps.provider.outputs['fallback-used'] || 'false' }}\`"
             echo "- CLI fixture results: \`${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results\`"
           } >> "$GITHUB_STEP_SUMMARY"
