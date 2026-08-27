@@ -1,5 +1,5 @@
-name: Claude Canary
-description: Regression-test Claude Code releases, configs and plugins with deterministic scenarios.
+name: Claude Code Canary
+description: Regression-test Claude Code releases, plugins and configs with deterministic scenarios and compatibility matrices.
 author: SLP-DEV1
 
 branding:
