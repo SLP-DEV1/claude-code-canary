@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import { z } from 'zod';
 import { loadScenario } from './config.js';
 import { clusterRunFailures, fingerprintRun, type FailureFingerprint } from './fingerprint.js';
+import { runScenarioWithCache } from './result-cache.js';
 import { runScenario } from './runner.js';
 import type { RunResult } from './types.js';
 
@@ -26,6 +27,7 @@ export const SuiteSchema = z.object({
   concurrency: z.number().int().min(1).max(32).default(1),
   fail_fast: z.boolean().default(false),
   max_runs: z.number().int().min(1).max(10_000).default(500),
+  reuse_results: z.boolean().default(false),
 }).strict().refine((value) => value.include.length > 0 || value.scenarios.length > 0, {
   message: 'A suite needs at least one include pattern or scenarios entry.',
 });
@@ -63,6 +65,8 @@ export interface SuiteRunOptions {
   gitRefOverride?: string;
   writeArtifacts?: boolean;
   artifactLabel?: string;
+  reuseResults?: boolean;
+  cacheRoot?: string;
 }
 
 export interface SuiteScenarioResult {
@@ -71,6 +75,8 @@ export interface SuiteScenarioResult {
   result?: RunResult;
   fingerprint?: FailureFingerprint;
   infrastructureError?: string;
+  cacheHit?: boolean;
+  cacheKey?: string;
 }
 
 export interface SuiteRunResult {
@@ -84,6 +90,7 @@ export interface SuiteRunResult {
   passedCount: number;
   failedCount: number;
   infrastructureFailedCount: number;
+  cacheHitCount: number;
   skippedBySelection: number;
   skipped: SkippedSuiteScenario[];
   shard?: string;
@@ -251,12 +258,13 @@ function formatSuiteMarkdown(result: SuiteRunResult): string {
     `**Result:** ${result.passed ? 'PASS' : 'FAIL'}`,
     `**Scenarios:** ${result.passedCount}/${result.total} passed`,
     `**Discovered:** ${result.discoveredTotal}; skipped by selection/sharding: ${result.skippedBySelection}`,
+    `**Cache hits:** ${result.cacheHitCount}`,
   ];
   if (result.tag) lines.push(`**Tag:** \`${result.tag}\``);
   if (result.shard) lines.push(`**Shard:** \`${result.shard}\``);
-  lines.push('', '| Scenario | Result | Fingerprint |', '| --- | --- | --- |');
+  lines.push('', '| Scenario | Result | Fingerprint | Cache |', '| --- | --- | --- | --- |');
   for (const item of result.scenarios) {
-    lines.push(`| \`${item.path}\` | ${item.passed ? 'PASS' : item.infrastructureError ? 'INFRA' : 'FAIL'} | ${item.fingerprint ? `\`${item.fingerprint.id}\`` : ''} |`);
+    lines.push(`| \`${item.path}\` | ${item.passed ? 'PASS' : item.infrastructureError ? 'INFRA' : 'FAIL'} | ${item.fingerprint ? `\`${item.fingerprint.id}\`` : ''} | ${item.cacheHit ? 'hit' : ''} |`);
     if (item.infrastructureError) lines.push(`\n> ${item.path}: ${item.infrastructureError.replace(/\n/g, ' ')}`);
   }
   if (result.skipped.length) {
@@ -285,6 +293,7 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
 
   const concurrency = Math.min(32, Math.max(1, options.concurrency ?? suite.concurrency));
   const failFast = options.failFast ?? suite.fail_fast;
+  const reuseResults = options.reuseResults ?? suite.reuse_results;
   const results: SuiteScenarioResult[] = new Array(resolved.length);
   let cursor = 0;
   let stop = false;
@@ -296,17 +305,35 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
       const item = resolved[index];
       try {
         const scenario = await loadScenario(path.resolve(cwd, item.path));
-        const run = await runScenario(scenario, {
-          cwd,
-          executableOverride: options.executableOverride,
-          gitRefOverride: options.gitRefOverride,
-          artifactLabel: options.artifactLabel ? `${options.artifactLabel}-${index + 1}` : undefined,
-        });
+        let run: RunResult;
+        let cacheHit = false;
+        let cacheKey: string | undefined;
+        if (reuseResults) {
+          const cached = await runScenarioWithCache(scenario, item.path, {
+            cwd,
+            executableOverride: options.executableOverride,
+            gitRefOverride: options.gitRefOverride,
+            artifactLabel: options.artifactLabel ? `${options.artifactLabel}-${index + 1}` : undefined,
+            cacheRoot: options.cacheRoot,
+          });
+          run = cached.result;
+          cacheHit = cached.cacheHit;
+          cacheKey = cached.cacheKey;
+        } else {
+          run = await runScenario(scenario, {
+            cwd,
+            executableOverride: options.executableOverride,
+            gitRefOverride: options.gitRefOverride,
+            artifactLabel: options.artifactLabel ? `${options.artifactLabel}-${index + 1}` : undefined,
+          });
+        }
         results[index] = {
           path: item.path,
           passed: run.passed,
           result: run,
           fingerprint: run.passed ? undefined : fingerprintRun(run),
+          cacheHit,
+          cacheKey,
         };
         if (!run.passed && failFast) stop = true;
       } catch (error) {
@@ -336,6 +363,7 @@ export async function runSuite(suitePath: string, options: SuiteRunOptions = {})
     passedCount: completed.filter((item) => item.passed).length,
     failedCount,
     infrastructureFailedCount,
+    cacheHitCount: completed.filter((item) => item.cacheHit).length,
     skippedBySelection: selection.skipped.length,
     skipped: selection.skipped,
     shard: options.shard,
@@ -386,6 +414,7 @@ export function combineSuiteResults(results: SuiteRunResult[]): SuiteRunResult {
     passedCount: scenarios.filter((item) => item.passed).length,
     failedCount,
     infrastructureFailedCount,
+    cacheHitCount: scenarios.filter((item) => item.cacheHit).length,
     skippedBySelection: 0,
     skipped: [],
     scenarios,
