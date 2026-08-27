@@ -1,0 +1,92 @@
+name: Release bootstrap v1.2.0
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.event.head_commit.message == 'chore: bootstrap v1.2.0 release'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: v1.2.0
+      RELEASE_SHA: b6b954811ba9f8b767abbe4f39fd43afdf5ef5d1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable release candidate and live gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$RELEASE_SHA^{commit}"
+          version="$(git show "$RELEASE_SHA:package.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).version))")"
+          [[ "v$version" == "$RELEASE_TAG" ]]
+          node --input-type=module <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const sha = process.env.RELEASE_SHA;
+          const response = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/live-e2e.yml/runs?per_page=100`, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              Authorization: `Bearer ${process.env.GH_TOKEN}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'claude-canary-release-bootstrap',
+            },
+          });
+          if (!response.ok) throw new Error(`Live E2E lookup failed: ${response.status} ${await response.text()}`);
+          const data = await response.json();
+          const match = data.workflow_runs?.find(run =>
+            run.head_sha === sha &&
+            run.conclusion === 'success' &&
+            run.display_title === 'Live Claude E2E (full)'
+          );
+          if (!match) throw new Error(`No successful Live Claude E2E (full) for ${sha}`);
+          console.log(`Release evidence: ${match.html_url}`);
+          NODE
+
+      - name: Create immutable v1.2.0 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            existing="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+            [[ "$existing" == "$RELEASE_SHA" ]] || { echo "$RELEASE_TAG already points to $existing" >&2; exit 1; }
+            echo "$RELEASE_TAG already points to the intended release SHA."
+          else
+            git tag "$RELEASE_TAG" "$RELEASE_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+
+      - name: Dispatch publish workflow explicitly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(printf '{\"ref\":\"main\",\"inputs\":{\"tag\":\"%s\"}}' "$RELEASE_TAG")"
+          curl --fail-with-body -L \
+            -X POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/dispatches" \
+            -d "$payload"
+
+      - name: Remove one-shot bootstrap workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/release-bootstrap-v1.2.0.yml
+          git commit -m 'chore: remove v1.2.0 release bootstrap'
+          git push origin HEAD:main
