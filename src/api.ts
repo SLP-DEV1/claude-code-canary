@@ -4,7 +4,9 @@ export type { Scenario } from './config.js';
 export { runScenario, filterFixtureChanges } from './runner.js';
 export type { PreparedRun, RunOptions } from './runner.js';
 export { formatRun, formatComparison } from './report.js';
-export type { RunResult, RunMetrics, CommandSummary, ProcessResult } from './types.js';
+export { evaluateComparisonRegressions } from './regressions.js';
+export type { ComparisonRegressionResult } from './regressions.js';
+export type { RunResult, RunMetrics, PermissionRequestTrace, CommandSummary, ProcessResult } from './types.js';
 
 export { bisectCommands, bisectReleases } from './bisect.js';
 export { runExperiment, formatExperiment } from './experiment.js';

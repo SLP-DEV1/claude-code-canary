@@ -54,7 +54,24 @@
           }
         },
         "claude_output_contains": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "claude_output_absent": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "claude_output_absent": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_prompts": { "type": "integer", "minimum": 0 },
+            "max_denied": { "type": "integer", "minimum": 0 },
+            "deny_prompted_tools": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] }
+          }
+        },
+        "hooks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sequence": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+            "deny_unexpected": { "type": "boolean", "default": false }
+          }
+        }
       }
     },
     "limits": {
@@ -64,6 +81,20 @@
         "max_tool_calls": { "type": "integer", "minimum": 0 },
         "max_total_tokens": { "type": "integer", "minimum": 0 },
         "max_cost_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "regressions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_total_tokens_increase_pct": { "type": "number", "minimum": 0 },
+        "max_input_tokens_increase_pct": { "type": "number", "minimum": 0 },
+        "max_output_tokens_increase_pct": { "type": "number", "minimum": 0 },
+        "max_reported_cost_increase_pct": { "type": "number", "minimum": 0 },
+        "max_tool_calls_increase_pct": { "type": "number", "minimum": 0 },
+        "max_permission_prompts_increase": { "type": "integer", "minimum": 0 },
+        "max_permission_denied_increase": { "type": "integer", "minimum": 0 },
+        "require_same_hook_sequence": { "type": "boolean", "default": false }
       }
     },
     "recording": {

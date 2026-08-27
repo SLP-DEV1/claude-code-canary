@@ -17,6 +17,28 @@ const fileContains = z.object({
   text: z.string(),
 }).strict();
 
+const permissionExpectations = z.object({
+  max_prompts: z.number().int().nonnegative().optional(),
+  max_denied: z.number().int().nonnegative().optional(),
+  deny_prompted_tools: z.array(z.string().min(1)).default([]),
+}).strict();
+
+const hookExpectations = z.object({
+  sequence: z.array(z.string().min(1)).default([]),
+  deny_unexpected: z.boolean().default(false),
+}).strict();
+
+const regressionThresholds = z.object({
+  max_total_tokens_increase_pct: z.number().nonnegative().optional(),
+  max_input_tokens_increase_pct: z.number().nonnegative().optional(),
+  max_output_tokens_increase_pct: z.number().nonnegative().optional(),
+  max_reported_cost_increase_pct: z.number().nonnegative().optional(),
+  max_tool_calls_increase_pct: z.number().nonnegative().optional(),
+  max_permission_prompts_increase: z.number().int().nonnegative().optional(),
+  max_permission_denied_increase: z.number().int().nonnegative().optional(),
+  require_same_hook_sequence: z.boolean().default(false),
+}).strict();
+
 const recordingMetadata = z.object({
   git_commit: z.string().regex(/^[0-9a-f]{40}$/i),
   recorded_at: z.string().min(1),
@@ -58,12 +80,15 @@ export const ScenarioSchema = z.object({
     file_contains: z.array(fileContains).default([]),
     claude_output_contains: z.array(z.string().min(1)).optional(),
     claude_output_absent: z.array(z.string().min(1)).optional(),
+    permissions: permissionExpectations.optional(),
+    hooks: hookExpectations.optional(),
   }).strict().optional(),
   limits: z.object({
     max_tool_calls: z.number().int().nonnegative().optional(),
     max_total_tokens: z.number().int().nonnegative().optional(),
     max_cost_usd: z.number().nonnegative().optional(),
   }).strict().optional(),
+  regressions: regressionThresholds.optional(),
   recording: recordingMetadata.optional(),
 }).strict();
 

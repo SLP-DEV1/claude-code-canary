@@ -8,9 +8,14 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function parseStreamMetrics(stdout: string): RunMetrics {
   const toolIds = new Set<string>();
   const hookEvents = new Set<string>();
+  const hookEventSequence: string[] = [];
   let parseErrors = 0;
   let inputTokens = 0;
   let outputTokens = 0;
@@ -19,23 +24,14 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
   let costUsd: number | undefined;
   let turns: number | undefined;
 
-  const inspect = (value: unknown): void => {
+  const inspectToolUses = (value: unknown): void => {
     if (Array.isArray(value)) {
-      for (const item of value) inspect(item);
+      for (const item of value) inspectToolUses(item);
       return;
     }
     if (!isRecord(value)) return;
-
     if (value.type === 'tool_use' && typeof value.id === 'string') toolIds.add(value.id);
-
-    if (typeof value.type === 'string' && value.type.toLowerCase().includes('hook')) {
-      hookEvents.add(value.type);
-    }
-    for (const key of ['hook_event_name', 'hook_name', 'hookEventName']) {
-      if (typeof value[key] === 'string') hookEvents.add(value[key] as string);
-    }
-
-    for (const nested of Object.values(value)) inspect(nested);
+    for (const nested of Object.values(value)) inspectToolUses(nested);
   };
 
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -50,8 +46,21 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
       continue;
     }
 
-    inspect(event);
+    inspectToolUses(event);
     if (!isRecord(event)) continue;
+
+    // `--include-hook-events` emits SDK lifecycle messages such as:
+    // { type: "system", subtype: "hook_started", hook_name, hook_event, ... }.
+    // `hook_event_name` belongs to hook stdin, not the stream-json lifecycle message.
+    if (event.type === 'system' && event.subtype === 'hook_started') {
+      const lifecycleEvent = stringValue(event.hook_event);
+      if (lifecycleEvent) {
+        hookEvents.add(lifecycleEvent);
+        hookEventSequence.push(lifecycleEvent);
+      }
+      const hookName = stringValue(event.hook_name);
+      if (hookName) hookEvents.add(hookName);
+    }
 
     const usage = isRecord(event.usage) ? event.usage : undefined;
     if (usage) {
@@ -75,6 +84,10 @@ export function parseStreamMetrics(stdout: string): RunMetrics {
     costUsd,
     turns,
     hookEvents: [...hookEvents].sort(),
+    hookEventSequence,
+    permissionPrompts: 0,
+    permissionDenied: 0,
+    permissionRequests: [],
     parseErrors,
   };
 }

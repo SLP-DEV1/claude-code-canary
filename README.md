@@ -180,6 +180,8 @@ claude-canary compare .canary/basic.canary.yml \
 
 Canary keeps historical native binaries in its own cache and never replaces your normal `claude` installation. Release manifests are checksum-verified; signed manifests are signature-verified where Anthropic publishes signatures.
 
+`compare` can also fail on **relative regressions even when both releases still produce the correct result**: token growth, reported-cost growth, extra tool calls, new permission prompts/denials, or a changed hook sequence. See [Efficiency and lifecycle regressions](docs/REGRESSION_SEMANTICS.md).
+
 ### Find the first bad release
 
 ```bash
@@ -299,11 +301,25 @@ expect:
   file_contains:
     - path: src/auth/index.ts
       text: authenticate
+  permissions:
+    max_prompts: 0
+    max_denied: 0
+  hooks:
+    sequence:
+      - PreToolUse
+      - PostToolUse
 
 limits:
   max_tool_calls: 100
   max_total_tokens: 200000
   max_cost_usd: 5
+
+regressions:
+  max_total_tokens_increase_pct: 25
+  max_reported_cost_increase_pct: 20
+  max_tool_calls_increase_pct: 25
+  max_permission_prompts_increase: 0
+  require_same_hook_sequence: true
 ```
 
 A run passes only when Claude exits successfully **and** every configured deterministic assertion/limit can be evaluated and passes. v1 fails closed on malformed/truncated `stream-json` and on cost limits when Claude does not report cost.
@@ -374,6 +390,7 @@ Run `claude-canary <command> --help` for command-specific flags.
 | [Plugin smoke generator](docs/PLUGIN_SMOKE_GENERATOR.md) | Discovery rules and generated scenarios |
 | [Plugin compatibility](docs/PLUGIN_COMPATIBILITY.md) | Focused plugin matrices and isolation |
 | [Version manager](docs/VERSION_MANAGER.md) | Release cache, checksums and signature trust |
+| [Efficiency & lifecycle regressions](docs/REGRESSION_SEMANTICS.md) | Relative token/cost/tool regressions, permission prompts and ordered hooks |
 | [Configuration experiments](docs/CONFIG_EXPERIMENTS.md) | A/B test layout and interpretation |
 | [Record & replay](docs/RECORD_REPLAY.md) | Recording workflow and privacy model |
 | [Reproduction bundles](docs/REPRO_BUNDLES.md) | Safe bundle generation and publishing checklist |

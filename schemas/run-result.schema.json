@@ -75,6 +75,21 @@
         "costUsd": { "type": "number", "minimum": 0 },
         "turns": { "type": "number", "minimum": 0 },
         "hookEvents": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "hookEventSequence": { "type": "array", "items": { "type": "string" } },
+        "permissionPrompts": { "type": "integer", "minimum": 0 },
+        "permissionDenied": { "type": "integer", "minimum": 0 },
+        "permissionRequests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "toolName": { "type": "string", "minLength": 1 },
+              "toolUseId": { "type": "string", "minLength": 1 },
+              "permissionMode": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
         "parseErrors": { "type": "integer", "minimum": 0 }
       }
     }
