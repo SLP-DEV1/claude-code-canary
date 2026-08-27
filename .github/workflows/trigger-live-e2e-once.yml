@@ -1,0 +1,19 @@
+name: Trigger Live Claude E2E Once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch core live E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run live-e2e.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=core
