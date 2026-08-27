@@ -17,7 +17,7 @@ const DEFAULT_MAX_SUITE_RUNS = 200;
 const HARD_MAX_SUITE_RUNS = 1000;
 const MAX_SUITE_SCENARIOS = 100;
 
-export type PluginSuiteScenarioKind = 'load' | 'command' | 'agent' | 'skill' | 'hook' | 'mcp' | 'custom';
+export type PluginSuiteScenarioKind = 'load' | 'command' | 'agent' | 'skill' | 'hook' | 'mcp' | 'lsp' | 'custom';
 
 export interface PluginSuiteScenario {
   id: string;
@@ -94,13 +94,18 @@ function normalizeRelative(value: string): string {
 }
 
 function safeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'component';
+  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  let start = 0;
+  while (start < normalized.length && normalized.charCodeAt(start) === 45) start += 1;
+  let end = normalized.length;
+  while (end > start && normalized.charCodeAt(end - 1) === 45) end -= 1;
+  return normalized.slice(start, Math.min(end, start + 80)) || 'component';
 }
 
 function scenarioKindFromFile(fileName: string): { kind: PluginSuiteScenarioKind; component?: string } {
   const base = fileName.replace(/\.canary\.ya?ml$/i, '');
   if (base === 'load') return { kind: 'load' };
-  for (const kind of ['command', 'agent', 'skill', 'hook', 'mcp'] as const) {
+  for (const kind of ['command', 'agent', 'skill', 'hook', 'mcp', 'lsp'] as const) {
     const prefix = `${kind}-`;
     if (base.startsWith(prefix) && base.length > prefix.length) {
       return { kind, component: base.slice(prefix.length) };
@@ -110,7 +115,7 @@ function scenarioKindFromFile(fileName: string): { kind: PluginSuiteScenarioKind
 }
 
 function kindRank(kind: PluginSuiteScenarioKind): number {
-  return ['load', 'command', 'agent', 'skill', 'hook', 'mcp', 'custom'].indexOf(kind);
+  return ['load', 'command', 'agent', 'skill', 'hook', 'mcp', 'lsp', 'custom'].indexOf(kind);
 }
 
 async function assertRegularFile(file: string, label: string): Promise<void> {
@@ -120,44 +125,55 @@ async function assertRegularFile(file: string, label: string): Promise<void> {
 }
 
 function parsedDiscoverySurface(value: unknown): { pluginName: string; keys: string[] } {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error('discovery.json must contain a JSON object.');
-  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('discovery.json must contain a JSON object.');
   const record = value as Record<string, unknown>;
-  if (typeof record.pluginName !== 'string' || !record.pluginName) {
-    throw new Error('discovery.json is missing pluginName.');
-  }
-
-  const fields = ['commands', 'agents', 'skills', 'hooks', 'mcpServers'] as const;
+  if (typeof record.pluginName !== 'string' || !record.pluginName) throw new Error('discovery.json is missing pluginName.');
   const keys: string[] = [];
-  for (const field of fields) {
-    const entries = record[field];
+  for (const field of ['commands', 'agents', 'skills', 'hooks', 'mcpServers'] as const) {
+    const entries = record[field] ?? [];
     if (!Array.isArray(entries)) throw new Error(`discovery.json ${field} must be an array.`);
     for (const entry of entries) {
-      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-        throw new Error(`discovery.json ${field} contains an invalid component.`);
-      }
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw new Error(`discovery.json ${field} contains an invalid component.`);
       const component = entry as Record<string, unknown>;
-      if (typeof component.name !== 'string' || typeof component.path !== 'string') {
-        throw new Error(`discovery.json ${field} component is missing name/path.`);
-      }
+      if (typeof component.name !== 'string' || typeof component.path !== 'string') throw new Error(`discovery.json ${field} component is missing name/path.`);
       keys.push(`${field}\u0000${component.name}\u0000${component.path}`);
     }
+  }
+  const lsp = record.lspServers ?? [];
+  if (!Array.isArray(lsp)) throw new Error('discovery.json lspServers must be an array.');
+  for (const entry of lsp) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw new Error('discovery.json lspServers contains an invalid component.');
+    const component = entry as Record<string, unknown>;
+    if (typeof component.name !== 'string' || typeof component.path !== 'string' || typeof component.command !== 'string' || !Array.isArray(component.extensions)) throw new Error('discovery.json LSP component is incomplete.');
+    keys.push(`lspServers\u0000${component.name}\u0000${component.path}\u0000${component.command}\u0000${JSON.stringify(component.extensions)}`);
+  }
+  const monitors = record.monitors ?? [];
+  if (!Array.isArray(monitors)) throw new Error('discovery.json monitors must be an array.');
+  for (const entry of monitors) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw new Error('discovery.json monitors contains an invalid component.');
+    const monitor = entry as Record<string, unknown>;
+    if (typeof monitor.name !== 'string' || typeof monitor.path !== 'string' || typeof monitor.command !== 'string' || typeof monitor.description !== 'string') throw new Error('discovery.json monitor is incomplete.');
+    keys.push(`monitors\u0000${monitor.name}\u0000${monitor.path}\u0000${monitor.command}\u0000${monitor.description}\u0000${String(monitor.when ?? '')}`);
+  }
+  const dependencies = record.dependencies ?? [];
+  if (!Array.isArray(dependencies)) throw new Error('discovery.json dependencies must be an array.');
+  for (const entry of dependencies) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) throw new Error('discovery.json dependencies contains an invalid dependency.');
+    const dependency = entry as Record<string, unknown>;
+    if (typeof dependency.name !== 'string') throw new Error('discovery.json dependency is missing name.');
+    keys.push(`dependencies\u0000${dependency.name}\u0000${String(dependency.version ?? '')}\u0000${String(dependency.marketplace ?? '')}`);
   }
   return { pluginName: record.pluginName, keys: keys.sort() };
 }
 
 function liveDiscoverySurface(discovery: PluginDiscovery): string[] {
-  const groups = [
-    ['commands', discovery.commands],
-    ['agents', discovery.agents],
-    ['skills', discovery.skills],
-    ['hooks', discovery.hooks],
-    ['mcpServers', discovery.mcpServers],
-  ] as const;
-  return groups
-    .flatMap(([field, entries]) => entries.map((entry) => `${field}\u0000${entry.name}\u0000${entry.path}`))
-    .sort();
+  const keys = [
+    ...(['commands', 'agents', 'skills', 'hooks', 'mcpServers'] as const).flatMap((field) => discovery[field].map((entry) => `${field}\u0000${entry.name}\u0000${entry.path}`)),
+    ...discovery.lspServers.map((entry) => `lspServers\u0000${entry.name}\u0000${entry.path}\u0000${entry.command}\u0000${JSON.stringify(entry.extensions)}`),
+    ...discovery.monitors.map((entry) => `monitors\u0000${entry.name}\u0000${entry.path}\u0000${entry.command}\u0000${entry.description}\u0000${entry.when ?? ''}`),
+    ...discovery.dependencies.map((entry) => `dependencies\u0000${entry.name}\u0000${entry.version ?? ''}\u0000${entry.marketplace ?? ''}`),
+  ];
+  return keys.sort();
 }
 
 function displaySurfaceKey(key: string): string {
@@ -209,6 +225,7 @@ export function expectedGeneratedPluginSuiteScenarioIds(discovery: PluginDiscove
   for (const component of discovery.skills) ids.push(`skill-${safeSlug(component.name)}`);
   for (const component of discovery.hooks) ids.push(`hook-${safeSlug(component.name)}`);
   for (const component of discovery.mcpServers) ids.push(`mcp-${safeSlug(component.name)}`);
+  for (const component of discovery.lspServers) ids.push(`lsp-${safeSlug(component.name)}`);
   return ids;
 }
 

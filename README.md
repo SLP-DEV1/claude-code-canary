@@ -240,6 +240,9 @@ Canary discovers standard and manifest-defined plugin surfaces including:
 - skills
 - hooks
 - MCP servers
+- LSP servers
+- background monitors (static contract only; never auto-started by Canary)
+- plugin dependencies and version constraints (static contract only)
 
 Generated suites are marker-protected, symlink-safe and intentionally reviewable. They are scaffolds: strengthen assertions for domain-specific behavior before treating them as proof.
 

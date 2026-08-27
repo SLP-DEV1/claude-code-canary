@@ -18,6 +18,9 @@ export { bisectCommands, bisectReleases } from './bisect.js';
 export { runExperiment, formatExperiment } from './experiment.js';
 
 export { discoverPlugin, generatePluginScenarios } from './plugin-init.js';
+export type { PluginComponent, PluginComponentKind, PluginDiscovery, PluginInitOptions, PluginInitResult, GeneratedPluginScenario } from './plugin-init.js';
+export { discoverExtendedPluginSurfaces } from './plugin-surfaces.js';
+export type { PluginDependency, PluginExtendedSurfaces, PluginLspServer, PluginMonitor, PluginSurfaceSource } from './plugin-surfaces.js';
 export {
   runPluginMatrix,
   resolvePluginMatrixVersions,

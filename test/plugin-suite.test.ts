@@ -90,6 +90,9 @@ function discovery(root: string): PluginDiscovery {
     skills: [],
     hooks: [],
     mcpServers: [],
+    lspServers: [],
+    monitors: [],
+    dependencies: [],
     warnings: [],
   };
 }
@@ -109,10 +112,11 @@ describe('plugin compatibility suites', () => {
     await writeFile(path.join(suite, 'load.canary.yml'), scenarioYaml('load'), 'utf8');
     await writeFile(path.join(suite, 'command-review.canary.yml'), scenarioYaml('command-review'), 'utf8');
     await writeFile(path.join(suite, 'hook-stop.canary.yml'), scenarioYaml('hook-stop'), 'utf8');
+    await writeFile(path.join(suite, 'lsp-typescript.canary.yml'), scenarioYaml('lsp-typescript'), 'utf8');
 
     const loaded = await loadGeneratedPluginSuite(suite);
-    expect(loaded.map((entry) => entry.id)).toEqual(['load', 'command-review', 'skill-guide', 'hook-stop']);
-    expect(loaded.map((entry) => entry.kind)).toEqual(['load', 'command', 'skill', 'hook']);
+    expect(loaded.map((entry) => entry.id)).toEqual(['load', 'command-review', 'skill-guide', 'hook-stop', 'lsp-typescript']);
+    expect(loaded.map((entry) => entry.kind)).toEqual(['load', 'command', 'skill', 'hook', 'lsp']);
   });
 
   it('refuses unmarked directories and protects the default run budget', async () => {
@@ -144,6 +148,30 @@ describe('plugin compatibility suites', () => {
 
     await writeDiscoveryFile(suite, { ...live, pluginName: 'other-plugin' });
     await expect(assertGeneratedPluginSuiteFresh(suite, live)).rejects.toThrow(/belongs to plugin other-plugin/i);
+  });
+
+
+  it('marks generated suites stale when extended static surfaces change', async () => {
+    const root = await tempRoot();
+    const suite = path.join(root, 'suite');
+    await mkdir(suite, { recursive: true });
+    const live = discovery(root);
+    const extended: PluginDiscovery = {
+      ...live,
+      lspServers: [{ kind: 'lsp', name: 'ts', path: '.lsp.json', source: 'default', command: 'typescript-language-server', extensions: ['.ts'] }],
+      monitors: [{ name: 'errors', path: 'monitors/monitors.json', source: 'default', command: 'tail -F errors.log', description: 'Errors' }],
+      dependencies: [{ name: 'shared-tools', version: '^1.0.0' }],
+    };
+    await writeDiscoveryFile(suite, extended);
+    await expect(assertGeneratedPluginSuiteFresh(suite, extended)).resolves.toBeUndefined();
+    await expect(assertGeneratedPluginSuiteFresh(suite, {
+      ...extended,
+      dependencies: [{ name: 'shared-tools', version: '^2.0.0' }],
+    })).rejects.toThrow(/stale/i);
+    await expect(assertGeneratedPluginSuiteFresh(suite, {
+      ...extended,
+      lspServers: [{ ...extended.lspServers[0]!, command: 'different-lsp' }],
+    })).rejects.toThrow(/stale/i);
   });
 
   it('requires every generated component scenario while allowing custom extras', () => {
