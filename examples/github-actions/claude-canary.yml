@@ -1,8 +1,9 @@
-name: Claude Canary
+name: Claude Canary — release compare
 
 on:
-  pull_request:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -16,14 +17,15 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Compare Claude Code releases
-        uses: SLP-DEV1/claude-code-canary@main
+        uses: SLP-DEV1/claude-code-canary@v1
         with:
+          mode: compare
           scenario: .canary/basic.canary.yml
-          from: 2.1.89
+          from: 2.1.220
           to: latest
           upload-results: "true"
