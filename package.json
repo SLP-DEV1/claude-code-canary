@@ -71,7 +71,7 @@
     "@openpgp/web-stream-tools": "0.3.1",
     "@types/node": "24.13.3",
     "tsx": "4.23.12",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vitest": "3.2.7"
   }
 }
