@@ -32,11 +32,14 @@ export interface RunMetrics {
   turns?: number;
   /** Unique hook/lifecycle names retained for the v1 aggregate metric contract. */
   hookEvents: string[];
-  /** Ordered lifecycle events exactly as observed from --include-hook-events. */
-  hookEventSequence: string[];
-  permissionPrompts: number;
-  permissionDenied: number;
-  permissionRequests: PermissionRequestTrace[];
+  /** Ordered lifecycle events exactly as observed from --include-hook-events. Added additively in v1. */
+  hookEventSequence?: string[];
+  /** PermissionRequest count. Optional so older v1 artifacts/consumers remain source-compatible. */
+  permissionPrompts?: number;
+  /** PermissionDenied count. Optional so older v1 artifacts/consumers remain source-compatible. */
+  permissionDenied?: number;
+  /** PermissionRequest details. Optional so older v1 artifacts/consumers remain source-compatible. */
+  permissionRequests?: PermissionRequestTrace[];
   parseErrors: number;
 }
 
