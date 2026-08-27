@@ -89,3 +89,24 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
       - run: npm pack --dry-run --ignore-scripts
+
+  required:
+    name: required
+    if: ${{ always() }}
+    needs:
+      - test
+      - package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all CI jobs to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "test=$TEST_RESULT"
+          echo "package=$PACKAGE_RESULT"
+          test "$TEST_RESULT" = "success"
+          test "$PACKAGE_RESULT" = "success"
