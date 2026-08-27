@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/scenario-suite.schema.json",
+  "title": "Claude Code Canary Scenario Suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name"],
+  "properties": {
+    "version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "include": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+    "exclude": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+    "tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+    "scenarios": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+          "affects": { "type": "array", "items": { "type": "string", "minLength": 1 }, "default": [] },
+          "always": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "concurrency": { "type": "integer", "minimum": 1, "maximum": 32, "default": 1 },
+    "fail_fast": { "type": "boolean", "default": false },
+    "max_runs": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 500 },
+    "reuse_results": { "type": "boolean", "default": false }
+  },
+  "anyOf": [
+    { "required": ["include"], "properties": { "include": { "minItems": 1 } } },
+    { "required": ["scenarios"], "properties": { "scenarios": { "minItems": 1 } } }
+  ]
+}
