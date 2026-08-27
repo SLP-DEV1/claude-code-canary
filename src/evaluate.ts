@@ -13,6 +13,20 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
+function isOrderedSubsequence(expected: string[], actual: string[]): boolean {
+  if (expected.length === 0) return true;
+  let expectedIndex = 0;
+  for (const event of actual) {
+    if (event === expected[expectedIndex]) expectedIndex += 1;
+    if (expectedIndex === expected.length) return true;
+  }
+  return false;
+}
+
+function formatSequence(sequence: string[]): string {
+  return sequence.length === 0 ? '(none)' : sequence.join(' -> ');
+}
+
 export async function evaluateExpectations(
   scenario: Scenario,
   worktree: string,
@@ -67,6 +81,33 @@ export async function evaluateExpectations(
 
   for (const text of expected?.claude_output_absent ?? []) {
     if (claudeOutput.includes(text)) failures.push(`Claude output contains forbidden text: ${JSON.stringify(text)}`);
+  }
+
+  if (expected?.permissions?.max_prompts !== undefined && metrics.permissionPrompts > expected.permissions.max_prompts) {
+    failures.push(`Permission-prompt limit exceeded: ${metrics.permissionPrompts} > ${expected.permissions.max_prompts}`);
+  }
+  if (expected?.permissions?.max_denied !== undefined && metrics.permissionDenied > expected.permissions.max_denied) {
+    failures.push(`Permission-denied limit exceeded: ${metrics.permissionDenied} > ${expected.permissions.max_denied}`);
+  }
+  for (const request of metrics.permissionRequests) {
+    if (!request.toolName) continue;
+    for (const pattern of expected?.permissions?.deny_prompted_tools ?? []) {
+      if (minimatch(request.toolName, pattern)) {
+        failures.push(`Unexpected permission prompt for tool ${request.toolName} (matched ${pattern})`);
+        break;
+      }
+    }
+  }
+
+  const expectedHookSequence = expected?.hooks?.sequence ?? [];
+  if (expected?.hooks?.deny_unexpected) {
+    const exactMatch = expectedHookSequence.length === metrics.hookEventSequence.length
+      && expectedHookSequence.every((event, index) => event === metrics.hookEventSequence[index]);
+    if (!exactMatch) {
+      failures.push(`Hook sequence mismatch: expected exactly ${formatSequence(expectedHookSequence)}; observed ${formatSequence(metrics.hookEventSequence)}`);
+    }
+  } else if (!isOrderedSubsequence(expectedHookSequence, metrics.hookEventSequence)) {
+    failures.push(`Hook sequence missing or out of order: expected ${formatSequence(expectedHookSequence)} within ${formatSequence(metrics.hookEventSequence)}`);
   }
 
   if (scenario.limits?.max_tool_calls !== undefined && metrics.toolCalls > scenario.limits.max_tool_calls) {
