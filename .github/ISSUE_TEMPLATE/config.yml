@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SLP-DEV1/claude-code-canary/security/policy
+    about: Please report security issues privately instead of opening a public issue.
+  - name: Documentation and usage
+    url: https://github.com/SLP-DEV1/claude-code-canary#documentation
+    about: Check the command and workflow guides before filing a support-style issue.
