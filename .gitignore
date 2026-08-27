@@ -2,5 +2,6 @@ node_modules/
 dist/
 coverage/
 .canary/results/
+.canary/provider-e2e/
 *.log
 .DS_Store
