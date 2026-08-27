@@ -1,0 +1,128 @@
+name: Harden plugin surfaces once
+
+on:
+  push:
+    branches: [feat/plugin-compat-surfaces]
+    paths: [.github/workflows/plugin-surfaces-harden-once.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/plugin-compat-surfaces
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - name: Harden compatibility behavior and docs
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def patch(file, old, new):
+              p = Path(file)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {file}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          patch('src/plugin-init.ts',
+            "  mcpServers?: unknown;\n}",
+            "  mcpServers?: unknown;\n  lspServers?: unknown;\n  dependencies?: unknown;\n  monitors?: unknown;\n  experimental?: unknown;\n}")
+
+          patch('src/plugin-init.ts',
+            "    `Generated scenarios: **${scenarios.length}**\\n\\n` +\n    scenarios.map((scenario) => `- `",
+            "    `Generated scenarios: **${scenarios.length}**\\n\\n` +\n    `Static compatibility surfaces: **${discovery.monitors.length} monitor(s)**, **${discovery.dependencies.length} plugin dependency/dependencies**. Monitors are discovered and validated but never started by Canary; dependency declarations are tracked as static contracts.\\n\\n` +\n    scenarios.map((scenario) => `- `")
+
+          p = Path('test/plugin-suite.test.ts')
+          text = p.read_text(encoding='utf-8')
+          marker = "\n  it('marks generated suites stale when extended static surfaces change', async () => {"
+          addition = '''
+
+            it('accepts pre-extended discovery metadata when the live plugin has no new surfaces', async () => {
+              const root = await tempRoot();
+              const suite = path.join(root, 'suite');
+              await mkdir(suite, { recursive: true });
+              const live = discovery(root);
+              const legacy = {
+                schemaVersion: 1,
+                pluginName: live.pluginName,
+                pluginRoot: '../plugin',
+                manifestPath: live.manifestPath,
+                commands: live.commands,
+                agents: live.agents,
+                skills: live.skills,
+                hooks: live.hooks,
+                mcpServers: live.mcpServers,
+                warnings: [],
+              };
+              await writeFile(path.join(suite, 'discovery.json'), `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
+              await expect(assertGeneratedPluginSuiteFresh(suite, live)).resolves.toBeUndefined();
+            });
+          '''
+          if marker not in text: raise SystemExit('legacy discovery insertion marker missing')
+          p.write_text(text.replace(marker, addition + marker, 1), encoding='utf-8')
+
+          patch('test/plugin-init.test.ts',
+            "              expect(generated.scenarios.some((entry) => entry.kind === ('monitor' as never))).toBe(false);",
+            "              expect(generated.scenarios.map((entry) => entry.kind)).not.toContain('monitor');")
+
+          patch('docs/PLUGIN_SUITE.md',
+            "6. MCP servers\n7. any custom scenarios added to the generated directory",
+            "6. MCP servers\n7. LSP servers\n8. any custom scenarios added to the generated directory")
+          patch('docs/PLUGIN_SUITE.md',
+            "Before any Claude run starts, `plugin-suite` compares the suite's `discovery.json` with the plugin's current discovered surface. If a command, agent, skill, hook or MCP server was added, removed, renamed or moved after the suite was generated, Canary refuses the run instead of testing stale coverage.",
+            "Before any Claude run starts, `plugin-suite` compares the suite's `discovery.json` with the plugin's current discovered surface. Commands, agents, skills, hooks, MCP servers and LSP servers are tracked. Monitor definitions and plugin dependency declarations are tracked too, including dependency version/marketplace constraints and the relevant LSP command/extensions. If any tracked surface changes after the suite was generated, Canary refuses the run instead of testing stale coverage.")
+          marker = "\n## Release selectors\n"
+          section = '''
+## LSP, monitors and plugin dependencies
+
+Canary handles these surfaces according to how Claude Code exposes them:
+
+- **LSP servers** are discovered from `.lsp.json` or `plugin.json#lspServers`, structurally validated, and receive generated release-matrix smoke scenarios. A missing external language-server executable or unavailable LSP registration is treated as a visible compatibility failure rather than a parser error.
+- **Monitors** are discovered from `monitors/monitors.json` or `experimental.monitors` and validated as a static contract. Canary never starts monitor commands automatically. Claude Code monitors are background processes and can execute unsandboxed commands, so silently launching them from a compatibility scanner would be unsafe.
+- **Plugin dependencies** are discovered from `plugin.json#dependencies` and tracked by name plus optional version and marketplace constraints. Canary treats declaration changes as stale-suite changes. Dependency installation/resolution itself remains Claude Code's responsibility during plugin loading.
+
+Legacy top-level `monitors` declarations are accepted during Claude Code's migration period but Canary records a warning recommending `experimental.monitors`.
+
+A previously generated `discovery.json` that predates these fields remains valid when the live plugin has no LSP servers, monitors or plugin dependencies. This avoids forcing unrelated plugins to regenerate suites just because Canary learned about new component types.
+
+'''
+          p = Path('docs/PLUGIN_SUITE.md')
+          text = p.read_text(encoding='utf-8')
+          if marker not in text: raise SystemExit('docs release marker missing')
+          p.write_text(text.replace(marker, '\n' + section + marker, 1), encoding='utf-8')
+
+          patch('docs/PLUGIN_SUITE.md',
+            "- Missing generated component scenarios are rejected; additional custom scenarios are allowed.\n- Generated smoke scenarios are scaffolds.",
+            "- Missing generated component scenarios are rejected; additional custom scenarios are allowed.\n- Monitor commands are never launched by Canary's suite generator or freshness guard.\n- Plugin dependency declarations are statically tracked; Canary does not act as a marketplace/package resolver.\n- LSP smoke scenarios depend on the plugin's declared external language-server executable being available in the test environment.\n- Generated smoke scenarios are scaffolds.")
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          marker = '## [Unreleased]\n'
+          if marker not in text: raise SystemExit('CHANGELOG Unreleased marker missing')
+          bullets = '''## [Unreleased]\n\n### Added\n\n- Plugin discovery and compatibility suites now understand Claude Code LSP servers, background monitors, and plugin dependency declarations. LSPs get generated release smoke scenarios; monitors and dependency constraints are tracked as static, side-effect-free compatibility surfaces.\n- Extended plugin discovery is exported through the public TypeScript API.\n'''
+          # Avoid creating a second Added heading if one already immediately exists under Unreleased.
+          if 'Plugin discovery and compatibility suites now understand Claude Code LSP servers' not in text:
+              text = text.replace(marker, bullets, 1)
+          changelog.write_text(text, encoding='utf-8')
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate
+        run: npm run check
+      - name: Package sanity
+        run: npm pack --dry-run --ignore-scripts
+      - name: Commit validated hardening
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src test docs README.md CHANGELOG.md
+          git diff --cached --quiet && exit 0
+          git commit -m "docs: define extended plugin compatibility semantics"
+          git push origin HEAD:feat/plugin-compat-surfaces
