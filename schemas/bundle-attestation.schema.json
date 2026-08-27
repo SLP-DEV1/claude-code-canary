@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/bundle-attestation.schema.json",
+  "title": "Claude Code Canary Bundle Attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","algorithm","createdAt","files","manifestHash"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "algorithm": { "enum": ["sha256","ed25519-sha256-manifest"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path","sha256","bytes"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "manifestHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "publicKeyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "signature": { "type": "string", "minLength": 1 }
+  }
+}
