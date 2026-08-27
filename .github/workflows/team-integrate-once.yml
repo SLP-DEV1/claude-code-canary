@@ -1,0 +1,247 @@
+name: Integrate agent-team CLI once
+
+on:
+  push:
+    branches:
+      - feat/agent-team-regressions
+    paths:
+      - .github/workflows/team-integrate-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/agent-team-regressions
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - name: Integrate CLI API docs and hardening
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def patch(file, old, new):
+              p = Path(file)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {file}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          patch(
+              'src/index.ts',
+              "import { checkBaseline, updateBaseline } from './baseline.js';\n",
+              "import { checkBaseline, updateBaseline } from './baseline.js';\nimport { compareAgentTeamResults, formatAgentTeamComparison, formatAgentTeamRun, loadAgentTeamResult, loadAgentTeamScenario, runAgentTeam } from './agent-team.js';\n",
+          )
+
+          marker = "\nprogram.command('plugin-init')\n"
+          team_commands = r'''
+program.command('team-run')
+  .description('Observe a real interactive Claude Code agent team')
+  .argument('[scenario]', 'agent-team scenario YAML', '.canary/team.team.yml')
+  .option('--version <version>', 'run an exact/stable/latest Claude Code release from Canary cache')
+  .option('--platform <id>', 'override release platform id for --version')
+  .option('-e, --executable <path>', 'override Claude executable instead of --version')
+  .option('--json', 'print JSON result after the interactive session', false)
+  .action(async (scenarioPath: string, options: { version?: string; platform?: string; executable?: string; json: boolean }) => {
+    const scenario = await loadAgentTeamScenario(scenarioPath);
+    const result = await runAgentTeam(scenario, {
+      cwd: process.cwd(),
+      version: options.version,
+      platform: options.platform,
+      executableOverride: options.executable,
+      onStatus: (message) => console.error(message),
+    });
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatAgentTeamRun(result));
+    if (result.status !== 'passed') process.exitCode = 1;
+  });
+
+program.command('team-compare')
+  .description('Compare two saved agent-team observation artifacts')
+  .argument('<baseline>', 'baseline *-agent-team.json result')
+  .argument('<candidate>', 'candidate *-agent-team.json result')
+  .option('--json', 'print JSON comparison', false)
+  .action(async (baselinePath: string, candidatePath: string, options: { json: boolean }) => {
+    const baseline = await loadAgentTeamResult(baselinePath);
+    const candidate = await loadAgentTeamResult(candidatePath);
+    const result = compareAgentTeamResults(baseline, candidate);
+    console.log(options.json ? JSON.stringify(result, null, 2) : formatAgentTeamComparison(result));
+    if (!result.passed) process.exitCode = 1;
+  });
+'''
+          p = Path('src/index.ts')
+          text = p.read_text(encoding='utf-8')
+          if marker not in text:
+              raise SystemExit('plugin-init marker missing')
+          p.write_text(text.replace(marker, '\n' + team_commands + marker, 1), encoding='utf-8')
+
+          api = Path('src/api.ts')
+          text = api.read_text(encoding='utf-8')
+          marker = "export { ScenarioSchema, loadScenario, parseScenario } from './config.js';\n"
+          block = r'''export {
+  AgentTeamScenarioSchema,
+  parseAgentTeamScenario,
+  loadAgentTeamScenario,
+  aggregateAgentTeamEvents,
+  evaluateAgentTeamExpectations,
+  runAgentTeam,
+  loadAgentTeamResult,
+  compareAgentTeamResults,
+  formatAgentTeamRun,
+  formatAgentTeamComparison,
+} from './agent-team.js';
+export type {
+  AgentTeamScenario,
+  AgentTeamEvent,
+  AgentTeamEventKind,
+  AgentTeamMember,
+  AgentTeamMetrics,
+  AgentTeamRunResult,
+  AgentTeamComparisonResult,
+  RunAgentTeamOptions,
+} from './agent-team.js';
+
+'''
+          if marker not in text:
+              raise SystemExit('API marker missing')
+          api.write_text(text.replace(marker, block + marker, 1), encoding='utf-8')
+
+          patch(
+              'test/api.test.ts',
+              "      'runScenario',\n",
+              "      'runScenario',\n      'AgentTeamScenarioSchema',\n      'runAgentTeam',\n      'compareAgentTeamResults',\n",
+          )
+
+          patch(
+              '.github/workflows/ci.yml',
+              "            [['plugin-init', '--help'], 'generate smoke-test scenarios'],\n",
+              "            [['team-run', '--help'], 'real interactive Claude Code agent team'],\n            [['team-compare', '--help'], 'saved agent-team observation artifacts'],\n            [['plugin-init', '--help'], 'generate smoke-test scenarios'],\n",
+          )
+
+          # Hard-fail signalled sessions and make timeout termination bounded.
+          patch(
+              'src/agent-team.ts',
+              "    let timedOut = false;\n    const timer = setTimeout(() => {\n      timedOut = true;\n      child.kill('SIGTERM');\n    }, options.timeoutMs);\n    child.once('error', (error) => { clearTimeout(timer); reject(error); });\n    child.once('exit', (code, signal) => { clearTimeout(timer); resolve({ code, signal, timedOut }); });",
+              "    let timedOut = false;\n    let forceTimer: NodeJS.Timeout | undefined;\n    const timer = setTimeout(() => {\n      timedOut = true;\n      child.kill('SIGTERM');\n      forceTimer = setTimeout(() => child.kill('SIGKILL'), 5000);\n    }, options.timeoutMs);\n    child.once('error', (error) => { clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); reject(error); });\n    child.once('exit', (code, signal) => { clearTimeout(timer); if (forceTimer) clearTimeout(forceTimer); resolve({ code, signal, timedOut }); });",
+          )
+          patch(
+              'src/agent-team.ts',
+              "    if (processResult.code !== 0 && processResult.code !== null) failures.push(`Interactive Claude team session exited with code ${processResult.code}`);\n    failures.push(...evaluateAgentTeamExpectations(scenario, metrics));",
+              "    if (processResult.code !== 0 && processResult.code !== null) failures.push(`Interactive Claude team session exited with code ${processResult.code}`);\n    if (processResult.signal) failures.push(`Interactive Claude team session terminated by signal ${processResult.signal}`);\n    failures.push(...evaluateAgentTeamExpectations(scenario, metrics));",
+          )
+          patch(
+              'src/agent-team.ts',
+              "  if (baseline.status === 'unsupported') failures.push('Baseline team run is unsupported and cannot establish a compatibility contract');",
+              "  if (baseline.status !== 'passed') failures.push(`Baseline team run status is ${baseline.status} and cannot establish a compatibility contract`);",
+          )
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8')
+          text = text.replace(
+              '  <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·\n',
+              '  <a href="docs/MCP_CONTRACTS.md">MCP contracts</a> ·\n  <a href="docs/AGENT_TEAMS.md">Agent teams</a> ·\n',
+              1,
+          )
+          text = text.replace(
+              '| "Did my MCP server silently change?" | Snapshot tools/prompts/resources and fail on removed tools, schema changes or capability regressions. |\n',
+              '| "Did my MCP server silently change?" | Snapshot tools/prompts/resources and fail on removed tools, schema changes or capability regressions. |\n| "Did Claude change how my agent team coordinates?" | Observe real interactive teammate/task lifecycle signals and compare privacy-safe structural snapshots. |\n',
+              1,
+          )
+          marker = '\n### Gate a pull request\n'
+          section = r'''
+### Observe a real agent team
+
+Agent teams are an experimental upstream surface and currently require a real interactive Claude Code session. Canary keeps that distinction explicit:
+
+```bash
+claude-canary team-run examples/agent-team.team.yml --version latest
+```
+
+The temporary observer records teammate names/types, task IDs/state, message counts, idle transitions and stop failures — **not** teammate prompts, message bodies, task descriptions or transcripts. Saved snapshots can be compared non-interactively:
+
+```bash
+claude-canary team-compare baseline-agent-team.json candidate-agent-team.json
+```
+
+If stdin/stdout is not a real TTY, `team-run` returns `unsupported` rather than silently measuring ordinary `-p` subagents. See [Agent-team regression testing](docs/AGENT_TEAMS.md).
+
+'''
+          if marker not in text:
+              raise SystemExit('README gate marker missing')
+          text = text.replace(marker, '\n' + section + marker, 1)
+          readme.write_text(text, encoding='utf-8')
+
+          roadmap = Path('ROADMAP.md')
+          text = roadmap.read_text(encoding='utf-8')
+          plugin_start = text.index('### P0 — Plugin surface coverage: LSP, monitors and dependencies')
+          team_start = text.index('### P0 — Agent-team regression testing', plugin_start)
+          doctor_start = text.index('### P1 — Extension compatibility doctor', team_start)
+          plugin_block = '''### P0 — Plugin surface coverage: LSP, monitors and dependencies *(implemented for v1.2)*
+
+`plugin-init`, `plugin-matrix` and `plugin-suite` now cover the current plugin declaration surfaces beyond skills/commands/hooks/MCP:
+
+- `.lsp.json` and manifest-defined LSP discovery with dedicated read-only release smoke scenarios;
+- LSP command/extension contract freshness checks;
+- monitor discovery/validation without automatically launching unsandboxed background commands;
+- plugin dependency name/version/marketplace constraint tracking;
+- stale-suite detection when any of those declarations changes;
+- legacy discovery metadata compatibility for plugins that do not use the new surfaces.
+
+Runtime dependency resolution remains Claude Code's responsibility, and monitor execution is intentionally not automated by the compatibility scanner. See `docs/PLUGIN_SUITE.md`.
+
+**Acceptance:** a plugin author can run one suite and see whether every safely testable supported component still loads and whether static monitor/dependency contracts drift across recent Claude Code releases.
+
+'''
+          team_block = '''### P0 — Agent-team regression testing *(implemented for v1.2; interactive observer)*
+
+Canary now has a dedicated real-team path instead of pretending `claude -p` subagents are agent teams:
+
+- `team-run` uses an interactive TTY session and forces the upstream experimental team flag only for that child process;
+- exact Claude Code releases can be selected through Canary's authenticated release cache;
+- observation-only hooks capture teammate spawn/name/type, task create/complete, message counts, idle transitions and stop failures;
+- duplicate/orphaned teammates and incomplete tasks become deterministic assertions;
+- `team-compare` detects structural delegation/coordination regressions between saved artifacts;
+- event capture is bounded and privacy-first: no Agent prompt, SendMessage body, task description, assistant transcript or environment value is persisted;
+- non-interactive environments return an explicit `unsupported` result rather than silently downgrading to ordinary subagents.
+
+Aggregate team-wide token/tool accounting is intentionally deferred until upstream exposes it through a documented privacy-safe surface. See `docs/AGENT_TEAMS.md`.
+
+**Acceptance:** Canary can detect that a Claude Code release changed observable teammate/task coordination behavior even when final repository output would still pass.
+
+'''
+          text = text[:plugin_start] + plugin_block + team_block + text[doctor_start:]
+          roadmap.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          marker = '### Added\n\n'
+          entries = (
+              '- Add `team-run` for real interactive Claude Code agent-team observation with privacy-safe teammate/task/message lifecycle snapshots and deterministic expectations.\n'
+              '- Add `team-compare`, a public agent-team result schema/API, bounded observer logs, explicit non-TTY `unsupported` results, and exact-release execution through Canary\'s verified Claude Code cache.\n'
+          )
+          if marker not in text:
+              raise SystemExit('CHANGELOG Added marker missing')
+          if '`team-run` for real interactive' not in text:
+              text = text.replace(marker, marker + entries, 1)
+          changelog.write_text(text, encoding='utf-8')
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate
+        run: npm run check
+      - name: Package sanity
+        run: npm pack --dry-run --ignore-scripts
+      - name: Commit validated integration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src test .github/workflows/ci.yml README.md ROADMAP.md CHANGELOG.md
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: expose agent-team regression workflows"
+          git push origin HEAD:feat/agent-team-regressions
