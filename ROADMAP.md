@@ -2,7 +2,7 @@
 
 Claude Code Canary is a regression layer for real Claude Code workflows. The roadmap intentionally prioritizes compatibility signals that can be measured deterministically over generic benchmarks or model leaderboards.
 
-Current stable release: **v1.1.0**.
+Current stable release: **v1.2.0**.
 
 ## Product principles
 

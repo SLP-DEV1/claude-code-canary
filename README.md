@@ -6,7 +6,7 @@
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/SLP-DEV1/claude-code-canary/actions/workflows/codeql.yml/badge.svg"></a>
   <img alt="Node 20+" src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white">
-  <img alt="v1.1.0" src="https://img.shields.io/badge/Claude%20Canary-v1.1.0-f7c948">
+  <img alt="v1.2.0" src="https://img.shields.io/badge/Claude%20Canary-v1.2.0-f7c948">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 

@@ -4,6 +4,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-27
+
 ### Added
 
 - Add `doctor --json` as a schema-versioned, secret-free extension compatibility preflight for provider mode, plugins, LSP binaries, project MCP transports and experimental agent-team constraints.
