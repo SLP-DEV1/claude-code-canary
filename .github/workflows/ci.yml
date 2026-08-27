@@ -62,6 +62,8 @@ jobs:
             [['baseline', '--help'], 'known-good metric baselines'],
             [['baseline', 'update', '--help'], 'save its reviewed metric baseline'],
             [['baseline', 'check', '--help'], 'committed known-good metric baseline'],
+            [['team-run', '--help'], 'real interactive Claude Code agent team'],
+            [['team-compare', '--help'], 'saved agent-team observation artifacts'],
             [['plugin-init', '--help'], 'generate smoke-test scenarios'],
             [['plugin-suite', '--help'], 'Run every generated plugin smoke scenario'],
             [['plugin-matrix', '--help'], 'Test one Claude Code plugin'],
