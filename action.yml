@@ -119,6 +119,16 @@ runs:
       working-directory: ${{ github.action_path }}
       run: npm run build
 
+    - name: Ensure pull request refs are available
+      if: ${{ inputs.mode == 'pr-check' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        CANARY_MODE: ${{ inputs.mode }}
+        CANARY_BASE_REF: ${{ inputs.base-ref }}
+        CANARY_HEAD_REF: ${{ inputs.head-ref }}
+      run: node "${GITHUB_ACTION_PATH}/scripts/ensure-pr-refs.mjs"
+
     - name: Run Claude Canary
       id: canary
       shell: bash
