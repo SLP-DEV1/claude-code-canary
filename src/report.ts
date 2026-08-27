@@ -23,8 +23,8 @@ export function formatRun(result: RunResult): string {
     `Tool calls:         ${result.metrics.toolCalls}`,
     `Total tokens:       ${tokens(result.metrics.totalTokens)}`,
     `Reported cost:      ${cost(result.metrics.costUsd)}`,
-    `Permission prompts: ${result.metrics.permissionPrompts}`,
-    `Permission denied:  ${result.metrics.permissionDenied}`,
+    `Permission prompts: ${result.metrics.permissionPrompts ?? 0}`,
+    `Permission denied:  ${result.metrics.permissionDenied ?? 0}`,
     `Duration:           ${duration(result.durationMs)}`,
     `Changed:            ${result.changedFiles.length} file(s)`,
   ];
@@ -49,8 +49,8 @@ export function formatComparison(
     ['Output tokens', tokens(baseline.metrics.outputTokens), tokens(candidate.metrics.outputTokens)],
     ['Total tokens', tokens(baseline.metrics.totalTokens), tokens(candidate.metrics.totalTokens)],
     ['Reported cost', cost(baseline.metrics.costUsd), cost(candidate.metrics.costUsd)],
-    ['Permission prompts', String(baseline.metrics.permissionPrompts), String(candidate.metrics.permissionPrompts)],
-    ['Permission denied', String(baseline.metrics.permissionDenied), String(candidate.metrics.permissionDenied)],
+    ['Permission prompts', String(baseline.metrics.permissionPrompts ?? 0), String(candidate.metrics.permissionPrompts ?? 0)],
+    ['Permission denied', String(baseline.metrics.permissionDenied ?? 0), String(candidate.metrics.permissionDenied ?? 0)],
     ['Duration', duration(baseline.durationMs), duration(candidate.durationMs)],
   ];
 
