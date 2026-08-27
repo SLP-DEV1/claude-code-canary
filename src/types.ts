@@ -23,6 +23,8 @@ export interface PermissionRequestTrace {
 
 export interface RunMetrics {
   toolCalls: number;
+  /** Unique tool names observed from stream-json tool_use events. Inputs are intentionally not retained. */
+  toolNames?: string[];
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
