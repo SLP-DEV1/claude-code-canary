@@ -97,7 +97,7 @@ async function tuneLivePluginScenarios() {
     if (!entry.isFile() || !entry.name.endsWith('.canary.yml')) continue;
     const target = path.join(pluginSuite, entry.name);
     const raw = await readFile(target, 'utf8');
-    const updated = raw.replace(/max_total_tokens:\s*80000\b/g, 'max_total_tokens: 160000');
+    const updated = raw.replace(/max_total_tokens:\s*80000\b/g, 'max_total_tokens: 200000');
     if (updated !== raw) {
       await writeFile(target, updated, 'utf8');
       tuned += 1;
@@ -107,7 +107,7 @@ async function tuneLivePluginScenarios() {
   if (tuned === 0) {
     throw new Error('Expected plugin-init to generate at least one scenario with the standard 80000-token guardrail.');
   }
-  console.log(`\nAdjusted ${tuned} generated live plugin scenario(s) to a 160000-token E2E budget.`);
+  console.log(`\nAdjusted ${tuned} generated live plugin scenario(s) to a 200000-token E2E budget.`);
 }
 
 async function findFailedArtifact() {
