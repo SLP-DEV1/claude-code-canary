@@ -36,6 +36,10 @@ export async function evaluateExpectations(
 ): Promise<string[]> {
   const failures: string[] = [];
   const expected = scenario.expect;
+  const permissionPrompts = metrics.permissionPrompts ?? 0;
+  const permissionDenied = metrics.permissionDenied ?? 0;
+  const permissionRequests = metrics.permissionRequests ?? [];
+  const hookEventSequence = metrics.hookEventSequence ?? [];
 
   const allowed = expected?.changed_files?.allow ?? [];
   if (allowed.length > 0) {
@@ -83,13 +87,13 @@ export async function evaluateExpectations(
     if (claudeOutput.includes(text)) failures.push(`Claude output contains forbidden text: ${JSON.stringify(text)}`);
   }
 
-  if (expected?.permissions?.max_prompts !== undefined && metrics.permissionPrompts > expected.permissions.max_prompts) {
-    failures.push(`Permission-prompt limit exceeded: ${metrics.permissionPrompts} > ${expected.permissions.max_prompts}`);
+  if (expected?.permissions?.max_prompts !== undefined && permissionPrompts > expected.permissions.max_prompts) {
+    failures.push(`Permission-prompt limit exceeded: ${permissionPrompts} > ${expected.permissions.max_prompts}`);
   }
-  if (expected?.permissions?.max_denied !== undefined && metrics.permissionDenied > expected.permissions.max_denied) {
-    failures.push(`Permission-denied limit exceeded: ${metrics.permissionDenied} > ${expected.permissions.max_denied}`);
+  if (expected?.permissions?.max_denied !== undefined && permissionDenied > expected.permissions.max_denied) {
+    failures.push(`Permission-denied limit exceeded: ${permissionDenied} > ${expected.permissions.max_denied}`);
   }
-  for (const request of metrics.permissionRequests) {
+  for (const request of permissionRequests) {
     if (!request.toolName) continue;
     for (const pattern of expected?.permissions?.deny_prompted_tools ?? []) {
       if (minimatch(request.toolName, pattern)) {
@@ -101,13 +105,13 @@ export async function evaluateExpectations(
 
   const expectedHookSequence = expected?.hooks?.sequence ?? [];
   if (expected?.hooks?.deny_unexpected) {
-    const exactMatch = expectedHookSequence.length === metrics.hookEventSequence.length
-      && expectedHookSequence.every((event, index) => event === metrics.hookEventSequence[index]);
+    const exactMatch = expectedHookSequence.length === hookEventSequence.length
+      && expectedHookSequence.every((event, index) => event === hookEventSequence[index]);
     if (!exactMatch) {
-      failures.push(`Hook sequence mismatch: expected exactly ${formatSequence(expectedHookSequence)}; observed ${formatSequence(metrics.hookEventSequence)}`);
+      failures.push(`Hook sequence mismatch: expected exactly ${formatSequence(expectedHookSequence)}; observed ${formatSequence(hookEventSequence)}`);
     }
-  } else if (!isOrderedSubsequence(expectedHookSequence, metrics.hookEventSequence)) {
-    failures.push(`Hook sequence missing or out of order: expected ${formatSequence(expectedHookSequence)} within ${formatSequence(metrics.hookEventSequence)}`);
+  } else if (!isOrderedSubsequence(expectedHookSequence, hookEventSequence)) {
+    failures.push(`Hook sequence missing or out of order: expected ${formatSequence(expectedHookSequence)} within ${formatSequence(hookEventSequence)}`);
   }
 
   if (scenario.limits?.max_tool_calls !== undefined && metrics.toolCalls > scenario.limits.max_tool_calls) {
