@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SLP-DEV1/claude-code-canary/schemas/canary-lock.schema.json",
+  "title": "Claude Code Canary Lockfile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","canaryVersion","claudeCode","platform","suites","generatedAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "canaryVersion": { "type": "string", "minLength": 1 },
+    "claudeCode": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "platform": { "type": "string", "minLength": 1 },
+    "suites": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["component","suiteHash","evidenceHash"],
+        "properties": {
+          "component": { "type": "string", "minLength": 1 },
+          "componentVersion": { "type": "string", "minLength": 1 },
+          "suiteHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "evidenceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  }
+}
