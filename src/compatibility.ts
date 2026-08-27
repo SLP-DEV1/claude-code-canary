@@ -90,8 +90,15 @@ export async function writeCompatibilityManifest(file: string, manifest: Compati
 }
 
 export async function loadCompatibilityManifest(file: string): Promise<CompatibilityManifest> {
-  const raw = await readFile(file, 'utf8');
-  return CompatibilityManifestSchema.parse(JSON.parse(raw));
+  return CompatibilityManifestSchema.parse(JSON.parse(await readFile(file, 'utf8')));
+}
+
+export async function loadCompatibilityRegistry(file: string): Promise<CompatibilityRegistry> {
+  return CompatibilityRegistrySchema.parse(JSON.parse(await readFile(file, 'utf8')));
+}
+
+export async function writeCompatibilityRegistry(file: string, registry: CompatibilityRegistry): Promise<void> {
+  await writeFile(file, `${JSON.stringify(CompatibilityRegistrySchema.parse(registry), null, 2)}\n`, 'utf8');
 }
 
 export function createCanaryLock(manifests: CompatibilityManifest[]): CanaryLock {
@@ -132,7 +139,10 @@ export function checkCanaryLock(lock: CanaryLock, current: { claudeCode: string;
     for (const expected of lock.suites) {
       const actual = current.manifests.find((manifest) => manifest.component === expected.component && manifest.componentVersion === expected.componentVersion);
       if (!actual) failures.push(`Missing compatibility evidence for ${expected.component}${expected.componentVersion ? `@${expected.componentVersion}` : ''}`);
-      else if (actual.suiteHash !== expected.suiteHash) failures.push(`Suite drift for ${expected.component}: ${expected.suiteHash} != ${actual.suiteHash}`);
+      else {
+        if (actual.suiteHash !== expected.suiteHash) failures.push(`Suite drift for ${expected.component}: ${expected.suiteHash} != ${actual.suiteHash}`);
+        if (actual.evidenceHash !== expected.evidenceHash) failures.push(`Evidence drift for ${expected.component}: ${expected.evidenceHash} != ${actual.evidenceHash}`);
+      }
     }
   }
   return { passed: failures.length === 0, failures };
@@ -145,8 +155,13 @@ export function mergeCompatibilityRegistries(name: string, registries: Compatibi
     schemaVersion: 1,
     name,
     generatedAt: new Date().toISOString(),
-    manifests: [...byEvidence.values()].sort((a, b) => a.component.localeCompare(b.component) || a.claudeCode.localeCompare(b.claudeCode)),
+    manifests: [...byEvidence.values()].sort((a, b) => a.component.localeCompare(b.component) || compareVersion(a.claudeCode, b.claudeCode)),
   });
+}
+
+export async function aggregateRegistryFiles(name: string, files: string[]): Promise<CompatibilityRegistry> {
+  if (!files.length) throw new Error('At least one registry file is required.');
+  return mergeCompatibilityRegistries(name, await Promise.all(files.map(loadCompatibilityRegistry)));
 }
 
 export interface CompatibilityQuery {
@@ -168,7 +183,7 @@ export function queryCompatibility(registry: CompatibilityRegistry, query: Compa
 }
 
 function versionParts(version: string): number[] { return version.split('.').map(Number); }
-function compareVersion(a: string, b: string): number {
+export function compareVersion(a: string, b: string): number {
   const aa = versionParts(a); const bb = versionParts(b);
   for (let i = 0; i < 3; i += 1) if (aa[i] !== bb[i]) return (aa[i] ?? 0) - (bb[i] ?? 0);
   return 0;
@@ -178,8 +193,65 @@ export function newestKnownGood(registry: CompatibilityRegistry, query: Omit<Com
   return queryCompatibility(registry, { ...query, result: 'pass' }).sort((a, b) => compareVersion(b.claudeCode, a.claudeCode))[0];
 }
 
+export function firstKnownBad(
+  registry: CompatibilityRegistry,
+  query: Omit<CompatibilityQuery, 'claudeCode' | 'result'>,
+  from?: string,
+  to?: string,
+): CompatibilityManifest | undefined {
+  return queryCompatibility(registry, query)
+    .filter((manifest) => manifest.result === 'fail')
+    .filter((manifest) => !from || compareVersion(manifest.claudeCode, from) >= 0)
+    .filter((manifest) => !to || compareVersion(manifest.claudeCode, to) <= 0)
+    .sort((a, b) => compareVersion(a.claudeCode, b.claudeCode))[0];
+}
+
+export interface CompatibilityExplanation {
+  component: string;
+  from?: string;
+  to?: string;
+  tested: CompatibilityManifest[];
+  newestGood?: CompatibilityManifest;
+  firstBad?: CompatibilityManifest;
+  status: 'no-evidence' | 'compatible' | 'regression-known' | 'mixed';
+  evidenceHashes: string[];
+  failureFingerprints: string[];
+}
+
+export function explainCompatibility(
+  registry: CompatibilityRegistry,
+  query: Omit<CompatibilityQuery, 'claudeCode' | 'result'> & { component: string },
+  from?: string,
+  to?: string,
+): CompatibilityExplanation {
+  const tested = queryCompatibility(registry, query)
+    .filter((manifest) => !from || compareVersion(manifest.claudeCode, from) >= 0)
+    .filter((manifest) => !to || compareVersion(manifest.claudeCode, to) <= 0)
+    .sort((a, b) => compareVersion(a.claudeCode, b.claudeCode));
+  const goods = tested.filter((manifest) => manifest.result === 'pass');
+  const bads = tested.filter((manifest) => manifest.result === 'fail');
+  const newestGood = goods.sort((a, b) => compareVersion(b.claudeCode, a.claudeCode))[0];
+  const firstBad = bads.sort((a, b) => compareVersion(a.claudeCode, b.claudeCode))[0];
+  let status: CompatibilityExplanation['status'];
+  if (!tested.length) status = 'no-evidence';
+  else if (!bads.length) status = 'compatible';
+  else if (firstBad && newestGood && compareVersion(firstBad.claudeCode, newestGood.claudeCode) > 0) status = 'regression-known';
+  else status = 'mixed';
+  return {
+    component: query.component,
+    from,
+    to,
+    tested,
+    newestGood,
+    firstBad,
+    status,
+    evidenceHashes: [...new Set(tested.map((manifest) => manifest.evidenceHash))].sort(),
+    failureFingerprints: [...new Set(tested.flatMap((manifest) => manifest.failureFingerprints))].sort(),
+  };
+}
+
 export interface CompatibilityGraph {
-  nodes: Array<{ id: string; kind: 'component' | 'claude-code' | 'platform'; label: string }>;
+  nodes: Array<{ id: string; kind: 'component' | 'claude-code' | 'platform' | 'canary'; label: string }>;
   edges: Array<{ from: string; to: string; result: CompatibilityManifest['result']; evidenceHash: string }>;
 }
 
@@ -191,13 +263,16 @@ export function buildCompatibilityGraph(registry: CompatibilityRegistry): Compat
     const componentId = `component:${componentLabel}`;
     const releaseId = `claude:${manifest.claudeCode}`;
     const platformId = `platform:${manifest.platform}`;
+    const canaryId = `canary:${manifest.canaryVersion}`;
     nodes.set(componentId, { id: componentId, kind: 'component', label: componentLabel });
     nodes.set(releaseId, { id: releaseId, kind: 'claude-code', label: manifest.claudeCode });
     nodes.set(platformId, { id: platformId, kind: 'platform', label: manifest.platform });
+    nodes.set(canaryId, { id: canaryId, kind: 'canary', label: manifest.canaryVersion });
     edges.push({ from: componentId, to: releaseId, result: manifest.result, evidenceHash: manifest.evidenceHash });
     edges.push({ from: releaseId, to: platformId, result: manifest.result, evidenceHash: manifest.evidenceHash });
+    edges.push({ from: componentId, to: canaryId, result: manifest.result, evidenceHash: manifest.evidenceHash });
   }
-  return { nodes: [...nodes.values()].sort((a, b) => a.id.localeCompare(b.id)), edges };
+  return { nodes: [...nodes.values()].sort((a, b) => a.id.localeCompare(b.id)), edges: edges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.evidenceHash.localeCompare(b.evidenceHash)) };
 }
 
 export function compatibilityBadgeMarkdown(manifest: CompatibilityManifest): string {
