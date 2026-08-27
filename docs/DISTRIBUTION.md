@@ -6,13 +6,13 @@ This guide covers the public distribution surfaces for Claude Code Canary: npm, 
 
 | Surface | Status | Canonical identity |
 | --- | --- | --- |
-| Source | Ready | `SLP-DEV1/claude-code-canary` |
-| GitHub Action | Metadata ready; Marketplace publication requires the GitHub release UI | `SLP-DEV1/claude-code-canary@v1` |
-| npm | Package metadata and release workflow ready; do not advertise npm install until the first public publish is verified | `claude-code-canary` |
+| Source | Live | `SLP-DEV1/claude-code-canary` |
+| GitHub Action | `@v1` is live and consumer-tested; Marketplace publication still requires the GitHub release UI | `SLP-DEV1/claude-code-canary@v1` |
+| npm | Live; the release workflow verifies registry visibility and the consumer smoke installs the published package from a clean project | `claude-code-canary` |
 | GitHub Release | Automated by `.github/workflows/release.yml` after release gates pass | immutable `vX.Y.Z` plus floating `v1` Action tag |
-| Awesome Claude Code (`erkcet`) | Submitted | resource suggestion #20 |
+| Awesome Claude Code (`erkcet`) | Submitted; issue #20 remains open | resource suggestion #20 |
 
-Do not claim a Marketplace or npm listing in the README until the corresponding public page is actually live.
+The npm install and `@v1` Action usage shown in the README are public, tested distribution paths. Do not claim a GitHub Marketplace listing until that separate UI publication is actually live.
 
 ## GitHub Marketplace
 
@@ -28,12 +28,12 @@ Recommended listing identity:
 
 - **Name:** Claude Code Canary
 - **Primary category:** Continuous integration
-- **Secondary category:** Code quality
+- **Secondary category:** Testing
 - **One-line positioning:** Deterministic regression tests and compatibility matrices across Claude Code releases, plugins and configs.
 
-Marketplace publication is an account/UI operation. From the root `action.yml`, use GitHub's Marketplace publication banner to draft a release, enable **Publish this Action to the GitHub Marketplace**, resolve any validation warnings, select the categories, accept the Marketplace Developer Agreement if required, complete 2FA, and publish the release.
+Marketplace publication is an account/UI operation. From the root `action.yml`, use GitHub's Marketplace publication banner to draft or edit the release, enable **Publish this Action to the GitHub Marketplace**, resolve any validation warnings, select the categories, accept the Marketplace Developer Agreement if required, complete 2FA, and publish/update the release.
 
-The normal release automation can still create ordinary GitHub Releases and move the floating `v1` tag, but the Marketplace opt-in itself must be completed in GitHub's release UI.
+The normal release automation can still create ordinary GitHub Releases and move the floating `v1` tag, but the Marketplace opt-in itself must be completed in GitHub's release UI. Repository issue #49 tracks this one remaining distribution step.
 
 ## npm
 
@@ -43,7 +43,7 @@ Package identity:
 claude-code-canary
 ```
 
-Expected installation after the first successful public publish:
+Published installation:
 
 ```bash
 npm install --global claude-code-canary
@@ -51,7 +51,7 @@ claude-canary --version
 claude-canary doctor
 ```
 
-The package is configured as public and points explicitly at the public npm registry. `.github/workflows/release.yml` uses a GitHub-hosted runner with `id-token: write`, Node 24 and an OIDC-capable npm CLI. Once npm Trusted Publishing is configured for this package, npm can authenticate the publish through OIDC rather than a long-lived token.
+The package is configured as public and points explicitly at the public npm registry. `.github/workflows/release.yml` uses a GitHub-hosted runner with `id-token: write`, Node 24 and an OIDC-capable npm CLI. npm publication requests provenance, verifies that the exact package version becomes visible in the public registry and only then continues the release chain.
 
 Trusted Publisher settings:
 
@@ -60,7 +60,7 @@ Trusted Publisher settings:
 - Workflow filename: `release.yml`
 - Allowed action: `npm publish`
 
-For the first publication, follow the bootstrap procedure in [RELEASING.md](RELEASING.md). After Trusted Publishing is verified, remove any temporary publish token and prefer OIDC-only publishing.
+Prefer npm Trusted Publishing/OIDC over a long-lived publish token. `NPM_TOKEN` exists in the workflow only as an optional bootstrap fallback while trusted publishing is being configured.
 
 Before every npm release:
 
@@ -71,13 +71,13 @@ npm run check
 npm pack --dry-run --ignore-scripts
 ```
 
-After publishing, verify the exact version is visible in the public registry before changing the README from source-install instructions to `npm install --global claude-code-canary`.
+After publication, the release workflow verifies registry visibility. `.github/workflows/consumer-smoke.yml` then independently installs the published package into an empty project and exercises the public CLI/API, so repository-checkout success is not treated as proof that consumers can install the release.
 
 ## Curated Claude Code lists
 
 ### erkcet/awesome-claude-code
 
-A project-affiliated resource suggestion was submitted as issue #20. The list explicitly allows a unique use case to qualify even below its normal star threshold.
+A project-affiliated resource suggestion was submitted as issue #20 and is still open. The list explicitly allows a unique use case to qualify even below its normal star threshold.
 
 Suggested listing text if the maintainer requests a PR:
 
@@ -89,7 +89,7 @@ Suggested listing text if the maintainer requests a PR:
 
 Target section: **CI/CD & DevOps**.
 
-The repository requires additions to both `README.md` and `README_CN.md` in the same PR.
+The repository requires additions to both `README.md` and `README_CN.md` in the same PR. Its contribution guide explicitly asks contributors to fork the repository and submit a PR, so do not substitute a promotional issue for that workflow.
 
 English row:
 
@@ -121,21 +121,27 @@ Do **not** submit yet. Its current rules require a resource to be at least 14 da
 
 ## Repository discovery metadata
 
-Keep the GitHub repository description focused on the problem rather than marketing language. Recommended topics include:
+Keep the GitHub repository description focused on the problem rather than marketing language. Repository issue #53 tracks the UI-only metadata/settings changes that the GitHub connector cannot write.
+
+Recommended topics include:
 
 ```text
 claude-code
 anthropic
 regression-testing
 compatibility-testing
+version-bisect
+claude-code-plugin
 github-actions
-ci-cd
+continuous-integration
 mcp
-plugins
-agentic-coding
-ai-agents
+mcp-server
 developer-tools
 cli
+testing
+ai-agent-testing
+agentic-coding
+ai-agents
 ```
 
 For npm discovery, keep `package.json` keywords centered on Claude Code, regression/compatibility testing, plugins, MCP, CI and agent testing. Avoid unrelated high-volume keywords.
@@ -148,6 +154,6 @@ After each public release, verify all of these before announcing it:
 2. The exact `vX.Y.Z` GitHub Release exists.
 3. `@v1` resolves to the intended compatible release.
 4. The npm version is visible and provenance is shown when published through Trusted Publishing.
-5. A tiny external workflow succeeds with both the exact Action tag and `@v1`.
+5. The consumer smoke succeeds against both the published npm package and the floating `@v1` Action from clean workspaces.
 6. Marketplace status is checked separately; do not infer it merely from the existence of a GitHub Release.
 7. README badges and displayed version numbers match the package/release version.
