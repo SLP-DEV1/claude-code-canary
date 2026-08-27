@@ -603,7 +603,10 @@ export function compareMcpSnapshots(baseline: McpContractSnapshot, candidate: Mc
 }
 
 function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'mcp';
+  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  const withoutLeading = normalized.replace(/^-+/, '');
+  const withoutTrailing = withoutLeading.replace(/-+$/, '');
+  return withoutTrailing.slice(0, 80) || 'mcp';
 }
 
 export function defaultMcpSnapshotPath(contract: McpContract, cwd = process.cwd()): string {
