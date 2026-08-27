@@ -4,6 +4,20 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+### Fixed
+
+- pass `--verbose` whenever Claude Code is invoked with `--output-format stream-json`, restoring compatibility with current headless Claude Code releases
+- add a regression test that locks the required `stream-json` invocation arguments
+
+### Changed
+
+- label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
+
+### Documentation
+
+- document custom and local Claude Code gateways, including a successfully tested Claude Code Router → llama.cpp → Qwen3.8-27B setup
+- clarify that reported cost values may be estimated, synthetic or otherwise unrelated to real billing when a proxy or local model is used
+
 ## [1.0.0] - 2026-08-27
 
 ### Added
