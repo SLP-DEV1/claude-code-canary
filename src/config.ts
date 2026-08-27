@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { PermissionPolicySchema } from './policy.js';
 
 const commandGroup = z.object({
   commands: z.array(z.string().min(1)).default([]),
@@ -83,6 +84,7 @@ export const ScenarioSchema = z.object({
     permissions: permissionExpectations.optional(),
     hooks: hookExpectations.optional(),
   }).strict().optional(),
+  policy: PermissionPolicySchema.optional(),
   limits: z.object({
     max_tool_calls: z.number().int().nonnegative().optional(),
     max_total_tokens: z.number().int().nonnegative().optional(),
