@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // The marketplace runner is intentionally dependency-free JavaScript so it can execute before Canary itself.
 // @ts-expect-error JavaScript helper module intentionally has no declaration file.
-import { buildCliArgs, parseBoolean, parsePositiveInteger, parseVersions } from '../scripts/action-runner.mjs';
+import { buildCliArgs, escapeHtmlText, parseBoolean, parsePositiveInteger, parseVersions } from '../scripts/action-runner.mjs';
 
 describe('marketplace action runner', () => {
   it('builds backwards-compatible compare arguments', () => {
@@ -61,5 +61,9 @@ describe('marketplace action runner', () => {
       .toThrow(/plugin is required/i);
     expect(() => buildCliArgs({ mode: 'plugin-matrix', from: '2.1.1', to: '', scenario: '', plugin: './p', suite: '', versions: [], last: 10, platform: '', maxRuns: 200, failOnIncompatible: true }))
       .toThrow(/from and to must be provided together/i);
+  });
+
+  it('escapes untrusted text before rendering it into an HTML code element', () => {
+    expect(escapeHtmlText('plugin <demo> & `tick` \\ path')).toBe('plugin &lt;demo&gt; &amp; `tick` \\ path');
   });
 });
