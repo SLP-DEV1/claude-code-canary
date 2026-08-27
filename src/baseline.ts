@@ -63,35 +63,85 @@ function portableRelative(root: string, file: string): string {
   return path.relative(root, file).split(path.sep).join('/');
 }
 
+function repositoryRelative(root: string, file: string, label: string): string {
+  const relative = path.relative(root, file);
+  if (!relative || relative === '.') throw new Error(`${label} must be a file inside the Git repository.`);
+  if (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)) {
+    throw new Error(`${label} must be inside the Git repository.`);
+  }
+  return relative.split(path.sep).join('/');
+}
+
+function nonnegativeFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function optionalNonnegativeFinite(value: unknown): boolean {
+  return value === undefined || nonnegativeFinite(value);
+}
+
+function optionalStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((entry) => typeof entry === 'string'));
+}
+
 function isMetrics(value: unknown): value is RunMetrics {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const metrics = value as Partial<RunMetrics>;
-  return [metrics.toolCalls, metrics.inputTokens, metrics.outputTokens, metrics.cacheReadTokens, metrics.cacheCreationTokens, metrics.totalTokens, metrics.parseErrors]
-    .every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+  const requiredNumbers = [
+    metrics.toolCalls,
+    metrics.inputTokens,
+    metrics.outputTokens,
+    metrics.cacheReadTokens,
+    metrics.cacheCreationTokens,
+    metrics.totalTokens,
+    metrics.parseErrors,
+  ];
+  if (!requiredNumbers.every(nonnegativeFinite)) return false;
+  if (!Number.isInteger(metrics.toolCalls) || !Number.isInteger(metrics.parseErrors)) return false;
+  if (!Array.isArray(metrics.hookEvents) || !metrics.hookEvents.every((entry) => typeof entry === 'string')) return false;
+  if (!optionalStringArray(metrics.hookEventSequence)) return false;
+  if (!optionalNonnegativeFinite(metrics.costUsd) || !optionalNonnegativeFinite(metrics.turns)) return false;
+  if (metrics.permissionPrompts !== undefined && (!Number.isInteger(metrics.permissionPrompts) || metrics.permissionPrompts < 0)) return false;
+  if (metrics.permissionDenied !== undefined && (!Number.isInteger(metrics.permissionDenied) || metrics.permissionDenied < 0)) return false;
+  if (metrics.permissionRequests !== undefined) {
+    if (!Array.isArray(metrics.permissionRequests)) return false;
+    for (const request of metrics.permissionRequests) {
+      if (!request || typeof request !== 'object' || Array.isArray(request)) return false;
+      for (const key of ['toolName', 'toolUseId', 'permissionMode'] as const) {
+        if (request[key] !== undefined && typeof request[key] !== 'string') return false;
+      }
+    }
+  }
+  return true;
 }
 
 function parseBaselineSnapshot(value: unknown, baselinePath: string): BaselineSnapshot {
-  if (!value || typeof value !== 'object') throw new Error(`${baselinePath} is not a Canary baseline object.`);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${baselinePath} is not a Canary baseline object.`);
   const candidate = value as Partial<BaselineSnapshot>;
   if (candidate.schemaVersion !== 1 || candidate.scenarioSchemaVersion !== 1) {
     throw new Error(`${baselinePath} uses an unsupported baseline schema version.`);
   }
-  for (const key of ['scenario', 'sourceScenario', 'scenarioHash', 'createdAt', 'gitCommit', 'executable'] as const) {
+  for (const key of ['scenario', 'sourceScenario', 'createdAt', 'executable'] as const) {
     if (typeof candidate[key] !== 'string' || candidate[key] === '') throw new Error(`${baselinePath} is missing ${key}.`);
   }
-  if (typeof candidate.durationMs !== 'number' || !Number.isFinite(candidate.durationMs) || candidate.durationMs < 0) {
-    throw new Error(`${baselinePath} has an invalid durationMs.`);
+  if (typeof candidate.scenarioHash !== 'string' || !/^[0-9a-f]{64}$/i.test(candidate.scenarioHash)) {
+    throw new Error(`${baselinePath} has an invalid scenarioHash.`);
   }
+  if (typeof candidate.gitCommit !== 'string' || !/^[0-9a-f]{40}$/i.test(candidate.gitCommit)) {
+    throw new Error(`${baselinePath} has an invalid gitCommit.`);
+  }
+  if (!nonnegativeFinite(candidate.durationMs)) throw new Error(`${baselinePath} has an invalid durationMs.`);
   if (!isMetrics(candidate.metrics)) throw new Error(`${baselinePath} has invalid run metrics.`);
   return candidate as BaselineSnapshot;
 }
 
-async function scenarioContext(scenarioPath: string, cwd: string): Promise<{ scenario: Scenario; resolved: string; source: string; hash: string; repoRoot: string }> {
+async function scenarioContext(scenarioPath: string, cwd: string): Promise<{ scenario: Scenario; resolved: string; source: string; hash: string; repoRoot: string; sourceScenario: string }> {
   const repoRoot = await getRepoRoot(cwd);
   const resolved = path.resolve(cwd, scenarioPath);
+  const sourceScenario = repositoryRelative(repoRoot, resolved, 'Scenario');
   const source = await readFile(resolved, 'utf8');
   const scenario = await loadScenario(resolved);
-  return { scenario, resolved, source, hash: sha256(source), repoRoot };
+  return { scenario, resolved, source, hash: sha256(source), repoRoot, sourceScenario };
 }
 
 export function defaultBaselinePath(repoRoot: string, scenarioName: string): string {
@@ -114,7 +164,7 @@ export async function updateBaseline(scenarioPath: string, options: BaselineUpda
     schemaVersion: 1,
     scenarioSchemaVersion: 1,
     scenario: context.scenario.name,
-    sourceScenario: portableRelative(context.repoRoot, context.resolved),
+    sourceScenario: context.sourceScenario,
     scenarioHash: context.hash,
     createdAt: new Date().toISOString(),
     gitCommit: run.gitCommit,
@@ -123,6 +173,7 @@ export async function updateBaseline(scenarioPath: string, options: BaselineUpda
     metrics: run.metrics,
   };
   const baselinePath = options.output ? path.resolve(cwd, options.output) : defaultBaselinePath(context.repoRoot, context.scenario.name);
+  repositoryRelative(context.repoRoot, baselinePath, 'Baseline output');
   await mkdir(path.dirname(baselinePath), { recursive: true });
   await writeFile(baselinePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
   return { baselinePath, snapshot, run };
@@ -152,9 +203,13 @@ export async function checkBaseline(scenarioPath: string, options: BaselineCheck
   const baselinePath = options.baseline
     ? path.resolve(cwd, options.baseline)
     : defaultBaselinePath(context.repoRoot, context.scenario.name);
+  repositoryRelative(context.repoRoot, baselinePath, 'Baseline');
   const baseline = await loadBaseline(baselinePath);
   if (baseline.scenario !== context.scenario.name) {
     throw new Error(`Baseline scenario mismatch: ${baseline.scenario} != ${context.scenario.name}.`);
+  }
+  if (baseline.sourceScenario !== context.sourceScenario) {
+    throw new Error(`Baseline source mismatch: ${baseline.sourceScenario} != ${context.sourceScenario}. Refresh the baseline for this scenario path.`);
   }
   if (baseline.scenarioHash !== context.hash) {
     throw new Error(`Baseline ${portableRelative(context.repoRoot, baselinePath)} is stale because the scenario file changed. Run claude-canary baseline update ${scenarioPath}.`);
