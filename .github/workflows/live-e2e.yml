@@ -1,5 +1,5 @@
 name: Live Claude E2E
-run-name: Live Claude E2E (${{ github.event_name == 'schedule' && 'core' || inputs.mode }})
+run-name: Live Claude E2E (${{ github.event_name == 'schedule' && 'core' || github.event_name == 'push' && 'full' || inputs.mode }})
 
 on:
   workflow_dispatch:
@@ -12,6 +12,11 @@ on:
         options:
           - core
           - full
+  push:
+    branches:
+      - main
+    paths:
+      - .github/release-candidate.json
   schedule:
     - cron: "23 4 * * *"
 
@@ -27,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      E2E_MODE: ${{ github.event_name == 'schedule' && 'core' || inputs.mode }}
+      E2E_MODE: ${{ github.event_name == 'schedule' && 'core' || github.event_name == 'push' && 'full' || inputs.mode }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -74,11 +79,11 @@ jobs:
             echo "Scheduled runs intentionally stay green when no provider key is configured."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Reject manual live test without provider auth
-        if: github.event_name == 'workflow_dispatch' && steps.auth.outputs.configured != 'true'
+      - name: Reject release or manual live test without provider auth
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && steps.auth.outputs.configured != 'true'
         shell: bash
         run: |
-          echo "::error::Manual Live Claude E2E requires GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY. A skipped manual run must never count as release evidence."
+          echo "::error::Full/manual Live Claude E2E requires GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY. A skipped release-evidence run must never count as successful evidence."
           exit 1
 
       - name: Install dependencies and build Canary
