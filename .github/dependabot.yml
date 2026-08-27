@@ -19,6 +19,21 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Keep the v1.x Node 20/toolchain contract stable. Review these major
+      # upgrades explicitly as part of a dedicated runtime/toolchain change.
+      - dependency-name: commander
+        update-types:
+          - version-update:semver-major
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
