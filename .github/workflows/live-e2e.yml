@@ -128,7 +128,7 @@ jobs:
           claude:
             executable: claude
             permission_mode: bypassPermissions
-            max_turns: 4
+            max_turns: 10
             timeout_seconds: 240
           verify:
             commands:
