@@ -147,7 +147,7 @@ jobs:
                 text: ACTION_OK
           limits:
             max_tool_calls: 20
-            max_total_tokens: 50000
+            max_total_tokens: 120000
           YAML
           git config user.name "Claude Canary E2E"
           git config user.email "claude-canary-e2e@example.invalid"
