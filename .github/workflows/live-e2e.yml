@@ -1,4 +1,5 @@
 name: Live Claude E2E
+run-name: Live Claude E2E (${{ github.event_name == 'schedule' && 'core' || inputs.mode }})
 
 on:
   workflow_dispatch:
@@ -60,8 +61,8 @@ jobs:
             echo "::notice::Live Claude E2E skipped: configure GROQ_API_KEY and/or OPENROUTER_API_KEY as Actions secrets."
           fi
 
-      - name: Explain skipped live test
-        if: steps.auth.outputs.configured != 'true'
+      - name: Explain skipped scheduled live test
+        if: github.event_name == 'schedule' && steps.auth.outputs.configured != 'true'
         shell: bash
         run: |
           {
@@ -70,6 +71,13 @@ jobs:
             echo "Configure \`GROQ_API_KEY\` for the primary free provider and optionally \`OPENROUTER_API_KEY\` for fallback."
             echo "Scheduled runs intentionally stay green when neither provider key is configured."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reject manual live test without provider auth
+        if: github.event_name == 'workflow_dispatch' && steps.auth.outputs.configured != 'true'
+        shell: bash
+        run: |
+          echo "::error::Manual Live Claude E2E requires GROQ_API_KEY and/or OPENROUTER_API_KEY. A skipped manual run must never count as release evidence."
+          exit 1
 
       - name: Install dependencies and build Canary
         if: steps.auth.outputs.configured == 'true'
@@ -195,6 +203,8 @@ jobs:
             echo "### Live Claude E2E"
             echo
             echo "- Mode: \`$E2E_MODE\`"
+            echo "- Release-evidence run name: \`Live Claude E2E ($E2E_MODE)\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
             echo "- Provider: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
             echo "- Model: \`${{ steps.provider.outputs.model || 'not completed' }}\`"
