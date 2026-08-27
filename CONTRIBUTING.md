@@ -1,6 +1,6 @@
 # Contributing to Claude Code Canary
 
-Thanks for helping make Claude Code regressions reproducible.
+Thanks for helping make Claude Code regressions reproducible. By participating in the project, follow the repository [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development
 
@@ -34,4 +34,4 @@ Node.js 20+ is required.
 
 ## Bug reports
 
-Please include your OS, Node version, Claude Code version, the smallest scenario that reproduces the problem, and the Canary JSON result if it contains no sensitive information.
+Please use the repository issue forms and include your OS, Node version, Claude Code version, the smallest scenario that reproduces the problem, and the Canary JSON result if it contains no sensitive information. See [SUPPORT.md](SUPPORT.md) for routing and privacy guidance.
