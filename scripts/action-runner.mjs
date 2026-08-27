@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { appendFile, mkdir, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
