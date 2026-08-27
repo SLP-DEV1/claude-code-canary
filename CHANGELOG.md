@@ -12,11 +12,13 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 ### Changed
 
 - label `total_cost_usd` metrics as **reported cost** so proxy and local-model users do not mistake upstream accounting metadata for actual billing
+- add a real Claude Code E2E harness with scheduled `core` coverage and a broader manual `full` suite for release validation
 
 ### Documentation
 
 - document custom and local Claude Code gateways, including a successfully tested Claude Code Router → llama.cpp → Qwen3.8-27B setup
 - clarify that reported cost values may be estimated, synthetic or otherwise unrelated to real billing when a proxy or local model is used
+- document local and GitHub Actions live E2E setup, authentication, cost and trust boundaries
 
 ## [1.0.0] - 2026-08-27
 

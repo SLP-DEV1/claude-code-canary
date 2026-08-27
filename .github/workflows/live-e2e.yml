@@ -1,0 +1,165 @@
+name: Live Claude E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Live coverage level. Full adds record/replay, experiment, bisect, plugins and Action self-test.
+        required: true
+        default: core
+        type: choice
+        options:
+          - core
+          - full
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-claude-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_MODE: ${{ github.event_name == 'schedule' && 'core' || inputs.mode }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Check Claude authentication
+        id: auth
+        shell: bash
+        run: |
+          if [[ -n "${ANTHROPIC_API_KEY:-}" || -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Live Claude E2E skipped: configure ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN as an Actions secret."
+          fi
+
+      - name: Explain skipped live test
+        if: steps.auth.outputs.configured != 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Live Claude E2E skipped"
+            echo
+            echo "Configure either \`ANTHROPIC_API_KEY\` or \`CLAUDE_CODE_OAUTH_TOKEN\` in repository Actions secrets."
+            echo "Scheduled runs intentionally stay green when authentication is not configured."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install dependencies and build Canary
+        if: steps.auth.outputs.configured == 'true'
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - name: Install latest Claude Code
+        if: steps.auth.outputs.configured == 'true'
+        shell: bash
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Show Claude Code version
+        if: steps.auth.outputs.configured == 'true'
+        shell: bash
+        run: claude --version
+
+      - name: Run live CLI E2E
+        if: steps.auth.outputs.configured == 'true'
+        shell: bash
+        env:
+          CLAUDE_CANARY_E2E_DIR: ${{ runner.temp }}/claude-canary-live-e2e
+          CLAUDE_CANARY_E2E_KEEP: "1"
+        run: node scripts/live-e2e.mjs "$E2E_MODE"
+
+      - name: Prepare Action self-test fixture
+        if: steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
+        shell: bash
+        run: |
+          mkdir -p .canary
+          cat > .canary/action-live.canary.yml <<'YAML'
+          version: 1
+          name: live-action-self-test
+          prompt: |
+            Create action-live-result.txt in the repository root containing exactly the single line ACTION_OK.
+            Do not modify, delete, or create any other repository file.
+          claude:
+            executable: claude
+            permission_mode: bypassPermissions
+            max_turns: 4
+            timeout_seconds: 240
+          verify:
+            commands:
+              - node -e "const fs=require('fs'); if(fs.readFileSync('action-live-result.txt','utf8').trim()!=='ACTION_OK') process.exit(1)"
+          expect:
+            changed_files:
+              allow:
+                - action-live-result.txt
+              require:
+                - action-live-result.txt
+              deny: []
+            files_exist:
+              - action-live-result.txt
+            file_contains:
+              - path: action-live-result.txt
+                text: ACTION_OK
+          limits:
+            max_tool_calls: 20
+            max_total_tokens: 50000
+          YAML
+          git config user.name "Claude Canary E2E"
+          git config user.email "claude-canary-e2e@example.invalid"
+          git config commit.gpgsign false
+          git add .canary/action-live.canary.yml
+          git commit -m "test: live Action fixture"
+
+      - name: Run local Claude Canary Action
+        if: steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
+        uses: ./
+        with:
+          mode: run
+          scenario: .canary/action-live.canary.yml
+          upload-results: "false"
+
+      - name: Upload live E2E evidence
+        if: always() && steps.auth.outputs.configured == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: live-claude-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results/
+            ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/repro-live/
+            .canary/results/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Write live E2E summary
+        if: always() && steps.auth.outputs.configured == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Live Claude E2E"
+            echo
+            echo "- Mode: \`$E2E_MODE\`"
+            echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
+            echo "- CLI fixture results: \`${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results\`"
+          } >> "$GITHUB_STEP_SUMMARY"
