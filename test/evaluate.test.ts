@@ -14,6 +14,10 @@ const metrics: RunMetrics = {
   cacheCreationTokens: 0,
   totalTokens: 15,
   hookEvents: [],
+  hookEventSequence: [],
+  permissionPrompts: 0,
+  permissionDenied: 0,
+  permissionRequests: [],
   parseErrors: 0,
 };
 
@@ -64,6 +68,64 @@ describe('deterministic expectations', () => {
       expect.stringMatching(/does not contain expected text.*PLUGIN_OK/),
       expect.stringMatching(/contains forbidden text.*Unknown command/),
     ]));
+  });
+
+  it('treats permission prompts and hook order as first-class assertions', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'canary-eval-'));
+    const scenario = parseScenario({
+      version: 1,
+      name: 'semantic-check',
+      prompt: 'x',
+      expect: {
+        permissions: {
+          max_prompts: 0,
+          max_denied: 0,
+          deny_prompted_tools: ['Read'],
+        },
+        hooks: {
+          sequence: ['PreToolUse', 'PostToolUse'],
+        },
+      },
+    });
+
+    const observed: RunMetrics = {
+      ...metrics,
+      hookEvents: ['PermissionRequest', 'PostToolUse', 'PreToolUse'],
+      hookEventSequence: ['PreToolUse', 'PermissionRequest', 'PostToolUse'],
+      permissionPrompts: 1,
+      permissionRequests: [{ toolName: 'Read', toolUseId: 'tool-1', permissionMode: 'auto' }],
+    };
+
+    const failures = await evaluateExpectations(scenario, dir, [], observed);
+    expect(failures).toEqual(expect.arrayContaining([
+      expect.stringMatching(/Permission-prompt limit exceeded/),
+      expect.stringMatching(/Unexpected permission prompt for tool Read/),
+    ]));
+    expect(failures.some((failure) => failure.includes('Hook sequence'))).toBe(false);
+  });
+
+  it('can require an exact lifecycle sequence', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'canary-eval-'));
+    const scenario = parseScenario({
+      version: 1,
+      name: 'hook-order-check',
+      prompt: 'x',
+      expect: {
+        hooks: {
+          sequence: ['PreToolUse', 'PostToolUse'],
+          deny_unexpected: true,
+        },
+      },
+    });
+
+    const observed = {
+      ...metrics,
+      hookEventSequence: ['PreToolUse', 'PermissionRequest', 'PostToolUse'],
+      permissionPrompts: 1,
+      permissionRequests: [{ toolName: 'Read' }],
+    };
+    const failures = await evaluateExpectations(scenario, dir, [], observed);
+    expect(failures).toEqual([expect.stringMatching(/Hook sequence mismatch/)]);
   });
 
   it('fails closed when a configured cost limit cannot be measured', async () => {
