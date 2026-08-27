@@ -1,15 +1,75 @@
 # Claude Canary GitHub Action
 
-Claude Canary v1 exposes one composite Action for deterministic release comparisons and plugin compatibility gates.
+Claude Canary exposes one composite Action for deterministic release comparisons, pull-request regression gates, committed-baseline checks and plugin compatibility suites.
 
 Supported modes:
 
 - `compare`
 - `run`
+- `pr-check`
+- `baseline-check`
 - `plugin-matrix`
 - `plugin-suite`
 
-The Action streams Canary output into the job log, writes a useful GitHub Step Summary and uploads `.canary/results/` by default.
+The Action streams Canary output into the job log, writes a GitHub Step Summary and uploads `.canary/results/` by default. Modes that produce Markdown reports (`pr-check`, `baseline-check`, `plugin-matrix`, `plugin-suite`) place that report directly in the Step Summary.
+
+## Pull-request regression gate
+
+For trusted/internal pull requests:
+
+```yaml
+name: Claude Canary PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write # only needed for comment-pr
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: SLP-DEV1/claude-code-canary@v1
+        with:
+          mode: pr-check
+          scenario: .canary/basic.canary.yml
+          comment-pr: true
+```
+
+When `base-ref` / `head-ref` are blank, Canary reads the exact base/head SHAs from the `pull_request` event. If one of those commits is absent from a shallow checkout, the Action fetches only that exact SHA before executing the check.
+
+`pr-check` uses the same Claude executable for both Git refs. It is intended to detect repository changes that preserve the final output but regress configured token, reported-cost, tool-call, permission or hook-sequence thresholds.
+
+`comment-pr` is opt-in. Canary writes one marker-owned bot comment and updates it on reruns rather than adding a new comment for every push. Comment writing is best-effort: a read-only fork token or missing `pull-requests: write` permission does not replace the underlying Canary result.
+
+See [Pull request regression checks](PR_CHECKS.md) for security and local usage.
+
+## One-run CI with a committed baseline
+
+First create and review a baseline locally:
+
+```bash
+claude-canary baseline update .canary/basic.canary.yml
+```
+
+Commit the generated `.canary/baselines/<scenario-name>.json`, then use:
+
+```yaml
+- uses: SLP-DEV1/claude-code-canary@v1
+  with:
+    mode: baseline-check
+    scenario: .canary/basic.canary.yml
+```
+
+A custom snapshot can be selected with `baseline:`. Baseline checks execute Claude only once and apply the same `regressions` thresholds against stored known-good metrics. The snapshot includes a SHA-256 of the scenario YAML, so changing the scenario without refreshing the baseline fails closed.
+
+See [Committed baselines](BASELINES.md).
 
 ## Plugin suite quick start
 
@@ -44,7 +104,7 @@ jobs:
           last: 10
 ```
 
-For an exact, immutable Action release use `@v1.0.0` instead of the moving `@v1` compatibility tag.
+For the current exact immutable v1 patch release use `@v1.0.1` instead of the moving `@v1` compatibility tag. New modes documented under `[Unreleased]` are available from `main` until the next tagged release.
 
 ## Compare two Claude Code releases
 
@@ -86,10 +146,14 @@ You can use `versions` or `last` instead of `from`/`to`.
 
 | Input | Default | Used by | Description |
 | --- | --- | --- | --- |
-| `mode` | `compare` | all | `compare`, `run`, `plugin-matrix`, or `plugin-suite` |
-| `scenario` | mode-specific | compare/run/matrix | Scenario path |
-| `from` | — | compare/plugin modes | Baseline for compare, or oldest exact release in plugin range mode |
-| `to` | compare: `latest` | compare/plugin modes | Candidate for compare, or newest exact release in plugin range mode |
+| `mode` | `compare` | all | `compare`, `run`, `pr-check`, `baseline-check`, `plugin-matrix`, or `plugin-suite` |
+| `scenario` | mode-specific | compare/run/pr-check/baseline-check/matrix | Scenario path |
+| `from` | — | compare/plugin modes | Baseline release for compare, or oldest exact release in plugin range mode |
+| `to` | compare: `latest` | compare/plugin modes | Candidate release for compare, or newest exact release in plugin range mode |
+| `base-ref` | PR base SHA / `origin/main` | pr-check | Git ref for the baseline worktree |
+| `head-ref` | PR head SHA / `HEAD` | pr-check | Git ref for the candidate worktree |
+| `baseline` | generated default | baseline-check | Optional committed baseline JSON path |
+| `comment-pr` | `false` | pr-check | Best-effort stable PR report comment; requires `pull-requests: write` |
 | `plugin` | — | plugin modes | Plugin directory |
 | `suite` | auto | plugin-suite | Generated Canary plugin-suite directory |
 | `versions` | — | plugin modes | Space/comma-separated exact `x.y.z` releases |
@@ -116,7 +180,7 @@ Version selectors for plugin modes are mutually exclusive in practice: use one o
 
 ## Step Summary and artifacts
 
-`plugin-matrix` and `plugin-suite` already produce Markdown reports. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
+`pr-check`, `baseline-check`, `plugin-matrix` and `plugin-suite` create Markdown reports. The Action discovers the newly generated report and places it in `$GITHUB_STEP_SUMMARY`.
 
 For modes without a combined Markdown report, the Action adds a bounded excerpt of the live CLI output to the summary. Full progress remains in the job log.
 
@@ -132,7 +196,9 @@ node <action>/dist/index.js <args...>
 
 with `shell: false`.
 
-Paths or version selectors supplied through Action inputs are not concatenated into a shell command string. The only shell layer in the composite Action launches the fixed Node runner path.
+Paths or version selectors supplied through Action inputs are not concatenated into a shell command string. The only shell layer in the composite Action launches fixed Node helper paths.
+
+For `pr-check`, `scripts/ensure-pr-refs.mjs` fetches a missing ref only when it is an exact 40-character Git SHA. Arbitrary user-supplied text is not converted into a fetch ref by that helper.
 
 ## Security
 
@@ -146,9 +212,12 @@ Never combine privileged credentials with arbitrary fork code/scenarios. Safe de
 
 - `workflow_dispatch`;
 - trusted branch `push` events;
-- PR workflows where secrets are intentionally unavailable to forks.
+- PR workflows where secrets are intentionally unavailable to forks;
+- maintainer-approved/sandboxed model credentials for untrusted contributions.
 
 Be especially careful with `pull_request_target`: it runs with privileges from the base repository. Do not use it to check out and execute arbitrary untrusted fork contents with secrets.
+
+A normal fork `pull_request` may receive a read-only `GITHUB_TOKEN`; `comment-pr` then warns and leaves the regression check/result intact.
 
 ### Worktree isolation is not OS isolation
 
@@ -160,6 +229,7 @@ See [`SECURITY_MODEL.md`](SECURITY_MODEL.md) for the complete v1 trust model.
 
 Claude runs can consume API usage. Keep deterministic scenarios small and use:
 
+- committed baselines when a second live run is unnecessary;
 - `claude.max_turns`;
 - `claude.max_budget_usd` where supported;
 - scenario `limits`;
