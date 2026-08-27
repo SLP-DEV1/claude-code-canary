@@ -22,7 +22,7 @@ describe('extension compatibility doctor', () => {
   it('detects provider mode using presence only', () => {
     const env = {
       CLAUDE_CODE_USE_BEDROCK: '1',
-      CLAUDE_CODE_USE_VERTEX: 'false',
+      CLAUDE_CODE_USE_VERTEX: 'false-like-secret-value',
       ANTHROPIC_API_KEY: 'do-not-leak',
     } satisfies NodeJS.ProcessEnv;
     const report = detectProviderConfiguration(env);
@@ -30,7 +30,7 @@ describe('extension compatibility doctor', () => {
     expect(report.indicators).toEqual(['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']);
     expect(report.credentialsPresent.anthropicApiKey).toBe(true);
     expect(JSON.stringify(report)).not.toContain('do-not-leak');
-    expect(JSON.stringify(report)).not.toContain('false');
+    expect(JSON.stringify(report)).not.toContain('false-like-secret-value');
   });
 
   it('recognizes custom base URL without persisting its value', () => {
