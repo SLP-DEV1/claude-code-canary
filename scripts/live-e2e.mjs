@@ -13,7 +13,7 @@ if (!['core', 'full'].includes(mode)) {
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
-const cli = path.join(repoRoot, 'dist', 'index.js');
+const cli = path.join(repoRoot, 'dist', 'v2-cli.js');
 const claude = process.env.CLAUDE_CANARY_E2E_CLAUDE || 'claude';
 const keep = process.env.CLAUDE_CANARY_E2E_KEEP === '1';
 const requestedDir = process.env.CLAUDE_CANARY_E2E_DIR;
@@ -22,6 +22,7 @@ const workRoot = requestedDir
   ? path.resolve(requestedDir)
   : await mkdtemp(path.join(tmpdir(), 'claude-canary-live-e2e-'));
 const fixture = path.join(workRoot, 'fixture');
+let testedClaudeVersion;
 if (fixture === repoRoot || repoRoot.startsWith(`${fixture}${path.sep}`)) {
   throw new Error('Refusing to place the disposable live E2E fixture over the Claude Canary source repository.');
 }
@@ -51,6 +52,13 @@ function run(command, args, { cwd = repoRoot, expectFailure = false, env = {} } 
 
 function canary(args, options = {}) {
   return run(process.execPath, [cli, ...args], { cwd: fixture, ...options });
+}
+
+function exactVersionFromClaudeOutput(result) {
+  const text = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const match = /(?:^|\s)(\d+\.\d+\.\d+)(?:\s|$)/m.exec(text);
+  if (!match) throw new Error(`Could not parse exact Claude Code version from --version output: ${JSON.stringify(text.trim())}`);
+  return match[1];
 }
 
 async function write(relative, content) {
@@ -126,13 +134,19 @@ async function findFailedArtifact() {
 }
 
 async function coreSuite() {
-  run(claude, ['--version'], { cwd: fixture });
+  const versionResult = run(claude, ['--version'], { cwd: fixture });
+  testedClaudeVersion = exactVersionFromClaudeOutput(versionResult);
+  console.log(`Pinned Live E2E Claude Code version: ${testedClaudeVersion}`);
+
   canary(['doctor', '--executable', claude]);
   canary(['init', '.canary/generated.canary.yml']);
   canary(['validate', '.canary/generated.canary.yml']);
   canary(['validate', '.canary/live.canary.yml']);
 
-  canary(['versions', 'install', 'latest']);
+  // Pin every release-aware subtest to the exact executable version observed at
+  // E2E start. This prevents a newly published catalog entry from changing the
+  // tested release halfway through the same evidence run.
+  canary(['versions', 'install', testedClaudeVersion]);
   canary(['versions', 'list']);
 
   canary(['run', '.canary/live.canary.yml', '--executable', claude]);
@@ -143,6 +157,8 @@ async function coreSuite() {
 }
 
 async function fullSuite() {
+  if (!testedClaudeVersion) throw new Error('Full E2E requires coreSuite to pin the exact Claude Code version first.');
+
   canary([
     'experiment', '.canary/live.canary.yml',
     '--baseline-config', 'variants/baseline',
@@ -180,13 +196,13 @@ async function fullSuite() {
   canary([
     'plugin-matrix', '.canary/plugins/live-e2e/load.canary.yml',
     '--plugin', 'test-plugin',
-    '--last', '1',
+    '--versions', testedClaudeVersion,
   ]);
   canary([
     'plugin-suite',
     '--plugin', 'test-plugin',
     '--suite', '.canary/plugins/live-e2e',
-    '--last', '1',
+    '--versions', testedClaudeVersion,
     '--max-runs', '10',
   ]);
 }
@@ -196,9 +212,11 @@ try {
   await coreSuite();
   if (mode === 'full') await fullSuite();
   console.log(`\nLive Claude E2E (${mode}) passed.`);
+  console.log(`Pinned Claude Code version: ${testedClaudeVersion ?? 'unknown'}`);
   console.log(`Fixture: ${fixture}`);
 } catch (error) {
   console.error(`\nLive Claude E2E (${mode}) failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Pinned Claude Code version: ${testedClaudeVersion ?? 'not resolved'}`);
   console.error(`Fixture retained for inspection: ${fixture}`);
   process.exitCode = 1;
 } finally {
