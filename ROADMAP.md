@@ -39,7 +39,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 
 - ✅ interactive `suite init` bootstrap with deterministic non-interactive flags;
 - ✅ `suite migrate` helpers for legacy suite layouts with dry-run, fail-closed mapping and safe in-place backups;
-- clearer `lock diff` / manifest diff explanations;
+- ✅ semantic `lock diff` / manifest diff explanations with impact classification and machine-readable JSON;
 - richer `report` navigation for large suites;
 - documented examples for monorepos and multi-plugin workspaces;
 - faster diagnostics for invalid or stale evidence;

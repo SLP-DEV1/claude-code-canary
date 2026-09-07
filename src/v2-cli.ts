@@ -2,6 +2,7 @@
 
 const argv = process.argv.slice(2);
 const suiteSubcommand = argv[0] === 'suite' ? argv[1] : undefined;
+const diffCommand = (argv[0] === 'lock' || argv[0] === 'compat') && argv[1] === 'diff' ? argv[0] : undefined;
 
 if (suiteSubcommand === 'init') {
   try {
@@ -19,6 +20,14 @@ if (suiteSubcommand === 'init') {
     console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 2;
   }
+} else if (diffCommand) {
+  try {
+    const { runCompatibilityDiffCli } = await import('./compatibility-diff.js');
+    await runCompatibilityDiffCli(diffCommand === 'lock' ? 'lock' : 'manifest', argv.slice(2));
+  } catch (error) {
+    console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 2;
+  }
 } else {
   await import('./v2-core-cli.js');
   const rootHelp = argv.length === 0 ||
@@ -28,7 +37,9 @@ if (suiteSubcommand === 'init') {
     console.log(
       '\nDeveloper experience:\n' +
       '  suite init                  Create a validated scenario suite interactively\n' +
-      '  suite migrate <file>        Migrate a legacy suite layout safely',
+      '  suite migrate <file>        Migrate a legacy suite layout safely\n' +
+      '  lock diff <old> <new>       Explain semantic canary.lock changes\n' +
+      '  compat diff <old> <new>     Explain manifest regressions and evidence changes',
     );
   }
 }
