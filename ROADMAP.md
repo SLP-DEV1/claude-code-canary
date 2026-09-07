@@ -38,7 +38,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 ### v2.1 — Developer experience
 
 - ✅ interactive `suite init` bootstrap with deterministic non-interactive flags;
-- migration helpers for legacy suite layouts;
+- ✅ `suite migrate` helpers for legacy suite layouts with dry-run, fail-closed mapping and safe in-place backups;
 - clearer `lock diff` / manifest diff explanations;
 - richer `report` navigation for large suites;
 - documented examples for monorepos and multi-plugin workspaces;
