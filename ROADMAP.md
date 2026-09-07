@@ -40,7 +40,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 - ✅ interactive `suite init` bootstrap with deterministic non-interactive flags;
 - ✅ `suite migrate` helpers for legacy suite layouts with dry-run, fail-closed mapping and safe in-place backups;
 - ✅ semantic `lock diff` / manifest diff explanations with impact classification and machine-readable JSON;
-- richer `report` navigation for large suites;
+- ✅ richer static `report` navigation for large suites with search, filters, sorting, pagination and suite progress summaries;
 - documented examples for monorepos and multi-plugin workspaces;
 - faster diagnostics for invalid or stale evidence;
 - end-to-end examples for `watch` in scheduled GitHub Actions.
