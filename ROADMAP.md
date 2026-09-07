@@ -42,7 +42,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 - ✅ semantic `lock diff` / manifest diff explanations with impact classification and machine-readable JSON;
 - ✅ richer static `report` navigation for large suites with search, filters, sorting, pagination and suite progress summaries;
 - ✅ documented, parser-validated examples for monorepos and multi-plugin workspaces with affected-path selection patterns;
-- faster diagnostics for invalid or stale evidence;
+- ✅ fast `compat diagnose` diagnostics for invalid/stale manifests, registries and lockfiles with actionable fixes and CI-friendly JSON;
 - end-to-end examples for `watch` in scheduled GitHub Actions.
 
 ### v2.2 — Ecosystem publishing
