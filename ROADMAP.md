@@ -6,7 +6,7 @@ Claude Code Canary exists to answer one question reliably:
 
 ## Status
 
-The roadmap from v1.3 through v2.0 is implemented in the v2 compatibility platform. The v2.0.0 release candidate unifies release watching, scenario suites, compatibility evidence, CI reporting, trust regression testing and programmatic compatibility queries behind one local-first toolchain.
+The roadmap from v1.3 through v2.0 is implemented in the v2 compatibility platform. The v2.0.0 release unifies release watching, scenario suites, compatibility evidence, CI reporting, trust regression testing and programmatic compatibility queries behind one local-first toolchain.
 
 | Milestone | Status | Shipped outcome |
 | --- | --- | --- |
