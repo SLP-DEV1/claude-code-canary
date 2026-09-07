@@ -1,0 +1,13 @@
+version: 1
+name: monorepo-release
+
+concurrency: 4
+fail_fast: false
+max_runs: 50
+reuse_results: true
+
+scenarios:
+  - path: examples/workspaces/scenarios/monorepo-web.canary.yml
+  - path: examples/workspaces/scenarios/monorepo-api.canary.yml
+  - path: examples/workspaces/scenarios/monorepo-shared.canary.yml
+  - path: examples/workspaces/scenarios/monorepo-health.canary.yml
