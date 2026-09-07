@@ -1,0 +1,28 @@
+version: 1
+name: monorepo-web-smoke
+
+tags:
+  - monorepo
+  - web
+
+affects:
+  - apps/web/**
+  - packages/ui/**
+
+prompt: |
+  Treat this as a cheap workspace-selection smoke test.
+  Do not edit files. Respond with exactly WEB_WORKSPACE_OK.
+
+claude:
+  executable: claude
+  permission_mode: dontAsk
+  max_turns: 2
+  timeout_seconds: 120
+
+expect:
+  claude_output_contains:
+    - WEB_WORKSPACE_OK
+
+limits:
+  max_tool_calls: 5
+  max_total_tokens: 20000

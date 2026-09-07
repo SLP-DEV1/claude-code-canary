@@ -1,0 +1,26 @@
+version: 1
+name: monorepo-workspace-health
+
+tags:
+  - monorepo
+  - health
+
+always_run: true
+
+prompt: |
+  Treat this as the repository-wide health smoke test.
+  Do not edit files. Respond with exactly WORKSPACE_HEALTH_OK.
+
+claude:
+  executable: claude
+  permission_mode: dontAsk
+  max_turns: 2
+  timeout_seconds: 120
+
+expect:
+  claude_output_contains:
+    - WORKSPACE_HEALTH_OK
+
+limits:
+  max_tool_calls: 5
+  max_total_tokens: 20000

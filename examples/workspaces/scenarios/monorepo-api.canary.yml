@@ -1,0 +1,28 @@
+version: 1
+name: monorepo-api-smoke
+
+tags:
+  - monorepo
+  - api
+
+affects:
+  - services/api/**
+  - packages/server/**
+
+prompt: |
+  Treat this as a cheap workspace-selection smoke test.
+  Do not edit files. Respond with exactly API_WORKSPACE_OK.
+
+claude:
+  executable: claude
+  permission_mode: dontAsk
+  max_turns: 2
+  timeout_seconds: 120
+
+expect:
+  claude_output_contains:
+    - API_WORKSPACE_OK
+
+limits:
+  max_tool_calls: 5
+  max_total_tokens: 20000

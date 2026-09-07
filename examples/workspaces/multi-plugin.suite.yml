@@ -1,0 +1,12 @@
+version: 1
+name: multi-plugin-workspace
+
+concurrency: 2
+fail_fast: false
+max_runs: 30
+reuse_results: true
+
+scenarios:
+  - path: examples/workspaces/scenarios/plugin-alpha.canary.yml
+  - path: examples/workspaces/scenarios/plugin-beta.canary.yml
+  - path: examples/workspaces/scenarios/plugin-marketplace.canary.yml

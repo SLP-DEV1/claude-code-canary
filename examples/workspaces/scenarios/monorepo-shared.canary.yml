@@ -1,0 +1,29 @@
+version: 1
+name: monorepo-shared-contract
+
+tags:
+  - monorepo
+  - shared
+
+affects:
+  - packages/shared/**
+  - apps/web/**
+  - services/api/**
+
+prompt: |
+  Treat this as a cheap cross-workspace contract smoke test.
+  Do not edit files. Respond with exactly SHARED_CONTRACT_OK.
+
+claude:
+  executable: claude
+  permission_mode: dontAsk
+  max_turns: 2
+  timeout_seconds: 120
+
+expect:
+  claude_output_contains:
+    - SHARED_CONTRACT_OK
+
+limits:
+  max_tool_calls: 5
+  max_total_tokens: 20000
