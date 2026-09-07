@@ -23,7 +23,7 @@ if (suiteSubcommand === 'init') {
 } else if (diffCommand) {
   try {
     const { runCompatibilityDiffCli } = await import('./compatibility-diff.js');
-    await runCompatibilityDiffCli(diffCommand, argv.slice(2));
+    await runCompatibilityDiffCli(diffCommand === 'lock' ? 'lock' : 'manifest', argv.slice(2));
   } catch (error) {
     console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 2;
