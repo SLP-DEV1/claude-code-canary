@@ -1,13 +1,21 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as publicApi from '../src/api.js';
 import {
   diagnoseCompatibilityArtifact,
   diagnoseCompatibilityFile,
   formatCompatibilityDiagnostics,
+  runCompatibilityDiagnoseCli,
 } from '../src/compatibility-diagnostics.js';
-import { sha256Canonical, type CanaryLock, type CompatibilityManifest, type CompatibilityRegistry } from '../src/compatibility.js';
+import {
+  checkCanaryLock,
+  sha256Canonical,
+  type CanaryLock,
+  type CompatibilityManifest,
+  type CompatibilityRegistry,
+} from '../src/compatibility.js';
 
 const hash = (char: string): string => char.repeat(64);
 
@@ -25,6 +33,18 @@ function manifest(overrides: Partial<CompatibilityManifest> = {}): Compatibility
     evidenceHash: hash('b'),
     failureFingerprints: [],
     metadata: {},
+    ...overrides,
+  };
+}
+
+function lock(overrides: Partial<CanaryLock> = {}): CanaryLock {
+  return {
+    schemaVersion: 1,
+    canaryVersion: '2.0.0',
+    claudeCode: '2.1.263',
+    platform: 'linux-x64',
+    suites: [{ component: 'demo-plugin', componentVersion: '1.0.0', suiteHash: hash('a'), evidenceHash: hash('b') }],
+    generatedAt: '2026-09-07T20:00:00.000Z',
     ...overrides,
   };
 }
@@ -98,6 +118,17 @@ describe('compatibility evidence diagnostics', () => {
     ]));
   });
 
+  it('marks evidence with a materially future timestamp stale instead of passing it', () => {
+    const result = diagnoseCompatibilityArtifact(manifest({ createdAt: '2026-09-07T22:00:00.000Z' }), {
+      now: new Date('2026-09-07T21:00:00.000Z'),
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.stale).toBe(true);
+    expect(result.passed).toBe(false);
+    expect(result.diagnostics.some((item) => item.code === 'timestamp-future')).toBe(true);
+  });
+
   it('detects registry timestamps that predate embedded evidence and conflicting target evidence', () => {
     const registry: CompatibilityRegistry = {
       schemaVersion: 1,
@@ -119,17 +150,9 @@ describe('compatibility evidence diagnostics', () => {
   });
 
   it('turns canary.lock drift against current manifests into actionable diagnostics', () => {
-    const lock: CanaryLock = {
-      schemaVersion: 1,
-      canaryVersion: '2.0.0',
-      claudeCode: '2.1.263',
-      platform: 'linux-x64',
-      suites: [{ component: 'demo-plugin', componentVersion: '1.0.0', suiteHash: hash('a'), evidenceHash: hash('b') }],
-      generatedAt: '2026-09-07T20:00:00.000Z',
-    };
     const current = manifest({ suiteHash: hash('c'), evidenceHash: hash('d') });
 
-    const result = diagnoseCompatibilityArtifact(lock, { manifests: [current] });
+    const result = diagnoseCompatibilityArtifact(lock(), { manifests: [current] });
     expect(result.valid).toBe(true);
     expect(result.stale).toBe(true);
     expect(result.diagnostics.map((item) => item.code)).toEqual(expect.arrayContaining([
@@ -137,6 +160,34 @@ describe('compatibility evidence diagnostics', () => {
       'lock-evidence-drift',
     ]));
     expect(result.diagnostics.find((item) => item.code === 'lock-suite-drift')?.fix).toContain('lock diff');
+  });
+
+  it('rejects lock evidence from the wrong Claude release or platform even when hashes match', () => {
+    const pinned = lock();
+    const wrongTarget = manifest({
+      claudeCode: '2.1.264',
+      platform: 'win32-x64',
+      suiteHash: pinned.suites[0].suiteHash,
+      evidenceHash: pinned.suites[0].evidenceHash,
+    });
+
+    const check = checkCanaryLock(pinned, {
+      claudeCode: pinned.claudeCode,
+      platform: pinned.platform,
+      manifests: [wrongTarget],
+    });
+    expect(check.passed).toBe(false);
+    expect(check.failures).toEqual(expect.arrayContaining([
+      expect.stringContaining('Manifest Claude Code drift'),
+      expect.stringContaining('Manifest platform drift'),
+    ]));
+
+    const result = diagnoseCompatibilityArtifact(pinned, { manifests: [wrongTarget] });
+    expect(result.stale).toBe(true);
+    expect(result.diagnostics.map((item) => item.code)).toEqual(expect.arrayContaining([
+      'lock-manifest-release-drift',
+      'lock-manifest-platform-drift',
+    ]));
   });
 
   it('reports semantic timestamp corruption even though the v1 schema stores timestamps as strings', () => {
@@ -154,5 +205,56 @@ describe('compatibility evidence diagnostics', () => {
     expect(result.valid).toBe(false);
     expect(result.kind).toBe('unknown');
     expect(result.diagnostics[0].code).toBe('json-invalid');
+  });
+
+  it('keeps invalid support files machine-readable under --json', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'canary-evidence-cli-'));
+    const target = path.join(dir, 'plugin.compat.json');
+    const evidence = path.join(dir, 'broken-evidence.json');
+    await writeFile(target, JSON.stringify(manifest()), 'utf8');
+    await writeFile(evidence, '{ nope', 'utf8');
+
+    const previousExitCode = process.exitCode;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      process.exitCode = undefined;
+      await runCompatibilityDiagnoseCli([target, '--evidence', evidence, '--json']);
+      const payload = JSON.parse(String(log.mock.calls.at(-1)?.[0]));
+      expect(payload.valid).toBe(false);
+      expect(payload.diagnostics.some((item: { code: string }) => item.code === 'support-parse-error')).toBe(true);
+      expect(process.exitCode).toBe(4);
+    } finally {
+      process.exitCode = previousExitCode;
+      log.mockRestore();
+    }
+  });
+
+  it('keeps invalid --manifests inputs machine-readable under --json', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'canary-lock-cli-'));
+    const target = path.join(dir, 'canary.lock');
+    const helper = path.join(dir, 'wrong.compat.json');
+    await writeFile(target, JSON.stringify(lock()), 'utf8');
+    await writeFile(helper, JSON.stringify({ ...manifest(), evidenceHash: 'broken' }), 'utf8');
+
+    const previousExitCode = process.exitCode;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      process.exitCode = undefined;
+      await runCompatibilityDiagnoseCli([target, '--manifests', helper, '--json']);
+      const payload = JSON.parse(String(log.mock.calls.at(-1)?.[0]));
+      expect(payload.valid).toBe(false);
+      expect(payload.diagnostics.some((item: { code: string }) => item.code === 'support-schema-invalid')).toBe(true);
+      expect(process.exitCode).toBe(4);
+    } finally {
+      process.exitCode = previousExitCode;
+      log.mockRestore();
+    }
+  });
+
+  it('exports the diagnostics API from the package root', () => {
+    expect(typeof publicApi.detectCompatibilityArtifactKind).toBe('function');
+    expect(typeof publicApi.diagnoseCompatibilityArtifact).toBe('function');
+    expect(typeof publicApi.diagnoseCompatibilityFile).toBe('function');
+    expect(typeof publicApi.formatCompatibilityDiagnostics).toBe('function');
   });
 });
