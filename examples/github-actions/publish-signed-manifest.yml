@@ -1,0 +1,75 @@
+name: Publish signed Canary manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: Repository-relative compatibility manifest JSON file
+        required: true
+        default: .canary/compatibility.json
+        type: string
+      release_tag:
+        description: Existing GitHub Release tag to receive the signed manifest
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: canary-signed-manifest-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+env:
+  CANARY_MANIFEST_SIGNING_KEY: ${{ secrets.CANARY_MANIFEST_SIGNING_KEY }}
+  CANARY_MANIFEST_PUBLIC_KEY: ${{ vars.CANARY_MANIFEST_PUBLIC_KEY }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sign-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and build Canary
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - name: Validate signing configuration
+        shell: bash
+        run: |
+          test -n "$CANARY_MANIFEST_SIGNING_KEY" || { echo 'Missing CANARY_MANIFEST_SIGNING_KEY secret' >&2; exit 1; }
+          test -n "$CANARY_MANIFEST_PUBLIC_KEY" || { echo 'Missing CANARY_MANIFEST_PUBLIC_KEY variable' >&2; exit 1; }
+          test -f "${{ inputs.manifest }}" || { echo 'Manifest not found' >&2; exit 1; }
+          gh release view "${{ inputs.release_tag }}" >/dev/null
+
+      - name: Diagnose manifest before signing
+        run: node dist/v2-cli.js compat diagnose "${{ inputs.manifest }}" --json
+
+      - name: Sign compatibility manifest
+        run: |
+          mkdir -p .canary/signed
+          node dist/v2-cli.js compat sign "${{ inputs.manifest }}" \
+            --private-key-env CANARY_MANIFEST_SIGNING_KEY \
+            --output .canary/signed/manifest.signed.json
+
+      - name: Verify signature before publication
+        run: |
+          node dist/v2-cli.js compat verify .canary/signed/manifest.signed.json \
+            --public-key-env CANARY_MANIFEST_PUBLIC_KEY \
+            --json > .canary/signed/verification.json
+
+      - name: Publish immutable release assets
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            .canary/signed/manifest.signed.json \
+            .canary/signed/verification.json \
+            --clobber

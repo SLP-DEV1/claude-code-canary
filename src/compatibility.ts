@@ -152,13 +152,21 @@ export function checkCanaryLock(lock: CanaryLock, current: { claudeCode: string;
 }
 
 export function mergeCompatibilityRegistries(name: string, registries: CompatibilityRegistry[]): CompatibilityRegistry {
-  const byEvidence = new Map<string, CompatibilityManifest>();
-  for (const registry of registries) for (const manifest of registry.manifests) byEvidence.set(manifest.evidenceHash, manifest);
+  const byManifest = new Map<string, CompatibilityManifest>();
+  for (const registry of registries) {
+    for (const manifest of registry.manifests) byManifest.set(sha256Canonical(manifest), manifest);
+  }
   return CompatibilityRegistrySchema.parse({
     schemaVersion: 1,
     name,
     generatedAt: new Date().toISOString(),
-    manifests: [...byEvidence.values()].sort((a, b) => a.component.localeCompare(b.component) || compareVersion(a.claudeCode, b.claudeCode)),
+    manifests: [...byManifest.values()].sort((a, b) =>
+      a.component.localeCompare(b.component) ||
+      (a.componentVersion ?? '').localeCompare(b.componentVersion ?? '') ||
+      a.platform.localeCompare(b.platform) ||
+      compareVersion(a.claudeCode, b.claudeCode) ||
+      sha256Canonical(a).localeCompare(sha256Canonical(b))
+    ),
   });
 }
 
