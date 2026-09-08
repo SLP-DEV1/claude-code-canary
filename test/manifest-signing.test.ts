@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   signCompatibilityManifest,
   verifySignedCompatibilityManifest,
-  type CompatibilityManifest,
 } from '../src/manifest-signing.js';
+import type { CompatibilityManifest } from '../src/compatibility.js';
 
 function manifest(): CompatibilityManifest {
   return {
