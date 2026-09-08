@@ -1,0 +1,81 @@
+name: Claude Canary — scheduled release watch
+
+on:
+  schedule:
+    # GitHub cron is UTC. Pick a quiet minute to avoid top-of-hour congestion.
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-canary-release-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Restore Canary watch state
+        id: restore-watch-state
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .canary/watch-state.json
+          key: claude-canary-watch-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            claude-canary-watch-${{ runner.os }}-
+
+      - name: Require an explicit known-good baseline on first run
+        if: ${{ hashFiles('.canary/watch-state.json') == '' }}
+        shell: bash
+        env:
+          CANARY_KNOWN_GOOD: ${{ vars.CLAUDE_CANARY_KNOWN_GOOD }}
+        run: |
+          if [[ ! "$CANARY_KNOWN_GOOD" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Set repository variable CLAUDE_CANARY_KNOWN_GOOD to an exact tested release such as 2.1.263 before the first scheduled run." >&2
+            exit 1
+          fi
+
+      - name: Watch Claude Code releases
+        id: canary
+        continue-on-error: true
+        uses: SLP-DEV1/claude-code-canary@v2
+        with:
+          mode: watch
+          suite: .canary/release.suite.yml
+          watch-state: .canary/watch-state.json
+          watch-good: ${{ vars.CLAUDE_CANARY_KNOWN_GOOD }}
+          concurrency: "2"
+          upload-results: "true"
+          artifact-name: claude-canary-watch-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: "30"
+
+      - name: Save successful or regression watch state
+        if: ${{ always() && (steps.canary.outputs.exit-code == '0' || steps.canary.outputs.exit-code == '2') && hashFiles('.canary/watch-state.json') != '' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .canary/watch-state.json
+          key: claude-canary-watch-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Propagate Canary result
+        if: ${{ always() && steps.canary.outputs.exit-code != '0' }}
+        shell: bash
+        env:
+          CANARY_EXIT_CODE: ${{ steps.canary.outputs.exit-code }}
+        run: |
+          code="${CANARY_EXIT_CODE:-1}"
+          case "$code" in
+            2) echo "Claude Canary found a compatibility regression." >&2 ;;
+            3) echo "Claude Canary hit an infrastructure failure; state was not persisted so the release will be retried." >&2 ;;
+            4) echo "Claude Canary reported a configuration error." >&2 ;;
+            *) echo "Claude Canary failed without a recognized exit code." >&2; code=1 ;;
+          esac
+          exit "$code"
