@@ -7,7 +7,6 @@ import {
   CompatibilityManifestSchema,
   CompatibilityRegistrySchema,
   checkCanaryLock,
-  loadCompatibilityManifest,
   sha256Canonical,
   type CanaryLock,
   type CompatibilityManifest,
@@ -46,6 +45,11 @@ export interface CompatibilityDiagnosticResult {
   stale: boolean;
   passed: boolean;
   summary: string;
+  diagnostics: EvidenceDiagnostic[];
+}
+
+interface SupportReadResult<T> {
+  value?: T;
   diagnostics: EvidenceDiagnostic[];
 }
 
@@ -104,6 +108,7 @@ function timestampDiagnostic(
   }
   const ageMs = now.getTime() - milliseconds;
   if (ageMs < -5 * 60 * 1000) {
+    staleState.value = true;
     diagnostics.push({
       code: 'timestamp-future',
       severity: 'warning',
@@ -261,9 +266,11 @@ function diagnoseLock(lock: CanaryLock, options: CompatibilityDiagnosticOptions,
       const code = failure.startsWith('Missing compatibility evidence') ? 'lock-missing-evidence'
         : failure.startsWith('Suite drift') ? 'lock-suite-drift'
           : failure.startsWith('Evidence drift') ? 'lock-evidence-drift'
-            : failure.startsWith('Claude Code drift') ? 'release-mismatch'
-              : failure.startsWith('Platform drift') ? 'platform-mismatch'
-                : 'lock-drift';
+            : failure.startsWith('Manifest Claude Code drift') ? 'lock-manifest-release-drift'
+              : failure.startsWith('Manifest platform drift') ? 'lock-manifest-platform-drift'
+                : failure.startsWith('Claude Code drift') ? 'release-mismatch'
+                  : failure.startsWith('Platform drift') ? 'platform-mismatch'
+                    : 'lock-drift';
       diagnostics.push({
         code,
         severity: 'warning',
@@ -379,13 +386,73 @@ function valueAfter(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
-async function readStructuredFile(file: string): Promise<unknown> {
-  const raw = await readFile(file, 'utf8');
-  return /\.ya?ml$/i.test(path.extname(file)) ? YAML.parse(raw) : JSON.parse(raw);
+function supportPath(file: string, field?: string): string {
+  return field ? `${file}:${field}` : file;
+}
+
+async function readStructuredSupportFile(file: string, role: string): Promise<SupportReadResult<unknown>> {
+  let raw: string;
+  try {
+    raw = await readFile(file, 'utf8');
+  } catch (error) {
+    return {
+      diagnostics: [{
+        code: 'support-read-error',
+        severity: 'error',
+        path: file,
+        message: `Could not read ${role} file ${file}: ${error instanceof Error ? error.message : String(error)}`,
+        fix: `Check the ${role} path and file permissions.`,
+      }],
+    };
+  }
+
+  try {
+    return {
+      value: /\.ya?ml$/i.test(path.extname(file)) ? YAML.parse(raw) : JSON.parse(raw),
+      diagnostics: [],
+    };
+  } catch (error) {
+    return {
+      diagnostics: [{
+        code: 'support-parse-error',
+        severity: 'error',
+        path: file,
+        message: `Could not parse ${role} file ${file}: ${error instanceof Error ? error.message : String(error)}`,
+        fix: `Regenerate or repair the ${role} file before using it for compatibility diagnostics.`,
+      }],
+    };
+  }
+}
+
+async function loadManifestSupportFile(file: string): Promise<SupportReadResult<CompatibilityManifest>> {
+  const loaded = await readStructuredSupportFile(file, 'manifest');
+  if (loaded.value === undefined) return { diagnostics: loaded.diagnostics };
+  const parsed = CompatibilityManifestSchema.safeParse(loaded.value);
+  if (parsed.success) return { value: parsed.data, diagnostics: [] };
+  return {
+    diagnostics: parsed.error.issues.map((issue) => ({
+      code: 'support-schema-invalid',
+      severity: 'error',
+      path: supportPath(file, pathLabel(issue)),
+      message: `Invalid manifest ${file}: ${issue.message}`,
+      fix: 'Regenerate this manifest with `claude-canary compat manifest` before using it with --manifests.',
+    })),
+  };
 }
 
 function help(): string {
   return `Diagnose invalid or stale compatibility evidence without running Claude.\n\nUsage:\n  claude-canary compat diagnose <artifact.json> [options]\n\nOptions:\n  --evidence <file>           Verify a manifest evidenceHash against current evidence\n  --suite-definition <file>   Verify a manifest suiteHash against JSON/YAML definition data\n  --manifests <a,b,...>       Check canary.lock against current manifest files\n  --claude <version>          Expected Claude Code release\n  --platform <id>             Expected platform\n  --component <name>          Expected component for a manifest\n  --component-version <ver>   Expected component version for a manifest\n  --max-age-days <days>       Mark evidence older than this freshness window stale\n  --json                      Emit structured diagnostics\n  --help                      Show this help\n`;
+}
+
+function emitCliConfigurationError(message: string, json: boolean, file?: string): void {
+  const result = finalize('unknown', [{
+    code: 'cli-invalid',
+    severity: 'error',
+    message,
+    fix: 'Run `claude-canary compat diagnose --help` and correct the command arguments.',
+  }], false, file);
+  console.log(json ? JSON.stringify(result, null, 2) : formatCompatibilityDiagnostics(result));
+  process.exitCode = CanaryExitCode.configuration;
 }
 
 export async function runCompatibilityDiagnoseCli(args: string[]): Promise<void> {
@@ -393,14 +460,32 @@ export async function runCompatibilityDiagnoseCli(args: string[]): Promise<void>
     console.log(help());
     return;
   }
+
+  const json = args.includes('--json');
   const file = args[0];
-  if (!file || file.startsWith('-')) throw new Error('compat diagnose requires <artifact.json>.');
-  const known = new Set(['--evidence','--suite-definition','--manifests','--claude','--platform','--component','--component-version','--max-age-days','--json','--help','-h']);
+  if (!file || file.startsWith('-')) {
+    emitCliConfigurationError('compat diagnose requires <artifact.json>.', json);
+    return;
+  }
+
+  const flags = new Set(['--json','--help','-h']);
+  const valueOptions = new Set(['--evidence','--suite-definition','--manifests','--claude','--platform','--component','--component-version','--max-age-days']);
+  const known = new Set([...flags, ...valueOptions]);
   for (let index = 1; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg.startsWith('-')) continue;
-    if (!known.has(arg)) throw new Error(`Unknown compat diagnose option: ${arg}`);
-    if (!['--json','--help','-h'].includes(arg)) index += 1;
+    if (!known.has(arg)) {
+      emitCliConfigurationError(`Unknown compat diagnose option: ${arg}`, json, file);
+      return;
+    }
+    if (valueOptions.has(arg)) {
+      const value = args[index + 1];
+      if (!value || value.startsWith('-')) {
+        emitCliConfigurationError(`Option ${arg} requires a value.`, json, file);
+        return;
+      }
+      index += 1;
+    }
   }
 
   const maxAgeRaw = valueAfter(args, '--max-age-days');
@@ -408,18 +493,44 @@ export async function runCompatibilityDiagnoseCli(args: string[]): Promise<void>
   const evidenceFile = valueAfter(args, '--evidence');
   const suiteFile = valueAfter(args, '--suite-definition');
   const manifestFiles = valueAfter(args, '--manifests')?.split(',').map((item) => item.trim()).filter(Boolean) ?? [];
+
+  const supportDiagnostics: EvidenceDiagnostic[] = [];
+  let evidence: unknown;
+  let suiteDefinition: unknown;
+  const manifests: CompatibilityManifest[] = [];
+
+  if (evidenceFile) {
+    const loaded = await readStructuredSupportFile(evidenceFile, 'evidence');
+    supportDiagnostics.push(...loaded.diagnostics);
+    evidence = loaded.value;
+  }
+  if (suiteFile) {
+    const loaded = await readStructuredSupportFile(suiteFile, 'suite definition');
+    supportDiagnostics.push(...loaded.diagnostics);
+    suiteDefinition = loaded.value;
+  }
+  for (const manifestFile of manifestFiles) {
+    const loaded = await loadManifestSupportFile(manifestFile);
+    supportDiagnostics.push(...loaded.diagnostics);
+    if (loaded.value) manifests.push(loaded.value);
+  }
+
   const options: CompatibilityDiagnosticOptions = {
     maxAgeDays,
     expectedClaudeCode: valueAfter(args, '--claude'),
     expectedPlatform: valueAfter(args, '--platform'),
     expectedComponent: valueAfter(args, '--component'),
     expectedComponentVersion: valueAfter(args, '--component-version'),
-    evidence: evidenceFile ? await readStructuredFile(evidenceFile) : undefined,
-    suiteDefinition: suiteFile ? await readStructuredFile(suiteFile) : undefined,
-    manifests: manifestFiles.length ? await Promise.all(manifestFiles.map(loadCompatibilityManifest)) : undefined,
+    evidence,
+    suiteDefinition,
+    manifests: manifestFiles.length ? manifests : undefined,
   };
-  const result = await diagnoseCompatibilityFile(file, options);
-  console.log(args.includes('--json') ? JSON.stringify(result, null, 2) : formatCompatibilityDiagnostics(result));
+  const baseResult = await diagnoseCompatibilityFile(file, options);
+  const result = supportDiagnostics.length
+    ? finalize(baseResult.kind, [...baseResult.diagnostics, ...supportDiagnostics], baseResult.stale, baseResult.file)
+    : baseResult;
+
+  console.log(json ? JSON.stringify(result, null, 2) : formatCompatibilityDiagnostics(result));
   if (!result.valid) process.exitCode = CanaryExitCode.configuration;
   else if (result.stale) process.exitCode = CanaryExitCode.regression;
 }
