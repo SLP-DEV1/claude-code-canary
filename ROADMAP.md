@@ -47,7 +47,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 
 ### v2.2 — Ecosystem publishing
 
-- first-class static registry publishing helpers for GitHub Pages/Releases;
+- ✅ first-class static registry publishing for GitHub Pages/Releases with content-addressed manifests, deterministic checksums, CLI/API helpers and a parser-validated Pages workflow;
 - signed compatibility-manifest publishing workflow;
 - reusable community scenario-pack discovery metadata;
 - evidence-backed compatibility badge generation and publishing;

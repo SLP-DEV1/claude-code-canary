@@ -227,6 +227,21 @@ export type {
   CompatibilityDiagnosticOptions,
   CompatibilityDiagnosticResult,
 } from './compatibility-diagnostics.js';
+export {
+  StaticRegistryReleaseSchema,
+  StaticRegistryComponentSchema,
+  StaticRegistryIndexSchema,
+  buildStaticRegistryIndex,
+  renderStaticRegistryHtml,
+  publishCompatibilityRegistry,
+} from './registry-publish.js';
+export type {
+  StaticRegistryRelease,
+  StaticRegistryComponent,
+  StaticRegistryIndex,
+  StaticRegistryPublishOptions,
+  StaticRegistryPublishResult,
+} from './registry-publish.js';
 export { ScenarioPackSchema, inspectScenarioPack, installScenarioPack } from './packs.js';
 export type { ScenarioPack, InspectedScenarioPack } from './packs.js';
 
