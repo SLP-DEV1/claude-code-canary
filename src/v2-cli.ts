@@ -4,6 +4,7 @@ const argv = process.argv.slice(2);
 const suiteSubcommand = argv[0] === 'suite' ? argv[1] : undefined;
 const diffCommand = (argv[0] === 'lock' || argv[0] === 'compat') && argv[1] === 'diff' ? argv[0] : undefined;
 const diagnoseCommand = argv[0] === 'compat' && argv[1] === 'diagnose';
+const registryPublishCommand = argv[0] === 'registry' && argv[1] === 'publish';
 
 if (suiteSubcommand === 'init') {
   try {
@@ -37,6 +38,14 @@ if (suiteSubcommand === 'init') {
     console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 4;
   }
+} else if (registryPublishCommand) {
+  try {
+    const { runRegistryPublishCli } = await import('./registry-publish.js');
+    await runRegistryPublishCli(argv.slice(2));
+  } catch (error) {
+    console.error(`claude-canary: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 4;
+  }
 } else {
   await import('./v2-core-cli.js');
   const rootHelp = argv.length === 0 ||
@@ -44,12 +53,13 @@ if (suiteSubcommand === 'init') {
     (argv[0] === 'suite' && argv.some((value) => value === '--help' || value === '-h'));
   if (rootHelp) {
     console.log(
-      '\nDeveloper experience:\n' +
+      '\nDeveloper experience and publishing:\n' +
       '  suite init                  Create a validated scenario suite interactively\n' +
       '  suite migrate <file>        Migrate a legacy suite layout safely\n' +
       '  lock diff <old> <new>       Explain semantic canary.lock changes\n' +
       '  compat diff <old> <new>     Explain manifest regressions and evidence changes\n' +
-      '  compat diagnose <file>      Diagnose invalid or stale compatibility evidence',
+      '  compat diagnose <file>      Diagnose invalid or stale compatibility evidence\n' +
+      '  registry publish <file>     Build a static Pages/Release registry bundle',
     );
   }
 }
