@@ -4,6 +4,29 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-08
+
+### Added
+
+- Add interactive `suite init` and bounded `suite migrate` workflows for bootstrapping and safely modernizing scenario suites.
+- Add semantic `lock diff`, compatibility-manifest diffs and actionable `compat diagnose` diagnostics for invalid or stale evidence.
+- Add richer static report navigation for large suites, plus parser-validated monorepo, multi-plugin and scheduled `watch` GitHub Actions examples.
+- Add deterministic static compatibility-registry publishing for GitHub Pages and Releases with content-addressed manifests and checksums.
+- Add deterministic Ed25519 compatibility-manifest signing and verification, reusable scenario-pack discovery catalogs, evidence-backed SVG badges and conflict-aware registry import/export.
+- Export the new developer-experience and ecosystem-publishing APIs from the package root.
+
+### Changed
+
+- Harden `checkCanaryLock()` so supplied manifests must match the lock's Claude Code release and platform, not only component hashes.
+- Treat materially future-dated evidence as stale and keep auxiliary `compat diagnose --json` failures machine-readable.
+- Preserve distinct registry manifests that reference the same `evidenceHash` by deduplicating on canonical full-manifest identity.
+- Continue publishing the v2 Action channel through the floating `v2` tag after a successful stable release.
+
+### Release integrity
+
+- Release v2.1.0 only after the exact release commit passes the full CI/CodeQL matrix and `Live Claude E2E (full)`.
+- Publish npm with provenance, create the immutable `v2.1.0` GitHub release tag, move the floating `v2` Action tag, and run published consumer smoke.
+
 ## [2.0.0] - 2026-08-28
 
 ### Added
