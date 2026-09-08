@@ -99,12 +99,15 @@ describe('static compatibility registry publishing', () => {
 
     expect(a.manifestCount).toBe(3);
     expect(a.componentCount).toBe(2);
+    expect(a.files).toContain('.claude-canary-registry');
     expect(a.files).toContain('registry.json');
     expect(a.files).toContain('index.json');
     expect(a.files).toContain('index.html');
     expect(a.files).toContain('.nojekyll');
     expect(a.files.filter((file) => file.startsWith('manifests/'))).toHaveLength(3);
-    expect(await readFile(a.checksumPath, 'utf8')).toBe(await readFile(b.checksumPath, 'utf8'));
+    const checksums = await readFile(a.checksumPath, 'utf8');
+    expect(checksums).toContain('  .claude-canary-registry');
+    expect(checksums).toBe(await readFile(b.checksumPath, 'utf8'));
     expect(await readFile(a.indexPath, 'utf8')).toBe(await readFile(b.indexPath, 'utf8'));
     expect(await readFile(a.htmlPath!, 'utf8')).toContain('example-registry');
   });
@@ -131,6 +134,17 @@ describe('static compatibility registry publishing', () => {
 
     await expect(publishCompatibilityRegistry(registryFile, output)).rejects.toThrow(/not Canary-owned/i);
     expect(await readFile(path.join(output, 'keep.txt'), 'utf8')).toBe('important\n');
+  });
+
+  it('fails closed on unexpected top-level files even in a Canary-owned directory', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'canary-registry-unexpected-'));
+    const registryFile = await writeRegistry(root);
+    const output = path.join(root, 'site');
+    await publishCompatibilityRegistry(registryFile, output);
+    await writeFile(path.join(output, 'secret.txt'), 'do not publish\n', 'utf8');
+
+    await expect(publishCompatibilityRegistry(registryFile, output)).rejects.toThrow(/unexpected file/i);
+    expect(await readFile(path.join(output, 'secret.txt'), 'utf8')).toBe('do not publish\n');
   });
 
   it('rejects unsafe or non-http public base URLs', () => {
