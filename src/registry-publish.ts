@@ -11,6 +11,10 @@ import {
   type CompatibilityRegistry,
 } from './compatibility.js';
 
+const OWNERSHIP_MARKER = '.claude-canary-registry';
+const OWNERSHIP_MARKER_CONTENT = 'claude-code-canary static registry\n';
+const OWNED_TOP_LEVEL = new Set([OWNERSHIP_MARKER, '.nojekyll', 'index.html', 'index.json', 'registry.json', 'SHA256SUMS', 'manifests']);
+
 export const StaticRegistryReleaseSchema = z.object({
   claudeCode: z.string().regex(/^\d+\.\d+\.\d+$/),
   result: z.enum(['pass', 'fail', 'unsupported']),
@@ -194,23 +198,27 @@ export function renderStaticRegistryHtml(indexValue: StaticRegistryIndex): strin
 
 async function ensureOutputDirectory(outputDir: string): Promise<void> {
   await mkdir(outputDir, { recursive: true });
-  const marker = path.join(outputDir, '.claude-canary-registry');
+  const marker = path.join(outputDir, OWNERSHIP_MARKER);
   let entries: string[];
   try {
     entries = await readdir(outputDir);
   } catch {
     entries = [];
   }
-  if (entries.length > 0 && !entries.includes('.claude-canary-registry')) {
+  if (entries.length > 0 && !entries.includes(OWNERSHIP_MARKER)) {
     throw new Error(`Registry output directory is not empty and is not Canary-owned: ${outputDir}`);
   }
-  if (entries.includes('.claude-canary-registry')) {
+  if (entries.includes(OWNERSHIP_MARKER)) {
+    const unexpected = entries.filter((name) => !OWNED_TOP_LEVEL.has(name));
+    if (unexpected.length > 0) {
+      throw new Error(`Canary registry output contains unexpected file(s): ${unexpected.sort().join(', ')}`);
+    }
     for (const name of ['registry.json', 'index.json', 'index.html', 'SHA256SUMS', '.nojekyll']) {
       await rm(path.join(outputDir, name), { force: true });
     }
     await rm(path.join(outputDir, 'manifests'), { recursive: true, force: true });
   }
-  await writeFile(marker, 'claude-code-canary static registry\n', 'utf8');
+  await writeFile(marker, OWNERSHIP_MARKER_CONTENT, 'utf8');
   await mkdir(path.join(outputDir, 'manifests'), { recursive: true });
 }
 
@@ -232,6 +240,7 @@ export async function publishCompatibilityRegistry(
   const index = buildStaticRegistryIndex(registry, options);
   const contents = new Map<string, string>();
 
+  await writePublishedFile(outputDir, OWNERSHIP_MARKER, OWNERSHIP_MARKER_CONTENT, contents);
   await writePublishedFile(outputDir, 'registry.json', json(registry), contents);
   await writePublishedFile(outputDir, 'index.json', json(index), contents);
 
