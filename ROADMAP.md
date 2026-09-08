@@ -43,7 +43,7 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 - ✅ richer static `report` navigation for large suites with search, filters, sorting, pagination and suite progress summaries;
 - ✅ documented, parser-validated examples for monorepos and multi-plugin workspaces with affected-path selection patterns;
 - ✅ fast `compat diagnose` diagnostics for invalid/stale manifests, registries and lockfiles with actionable fixes and CI-friendly JSON;
-- end-to-end examples for `watch` in scheduled GitHub Actions.
+- ✅ end-to-end scheduled GitHub Actions `watch` example with persisted state, explicit known-good bootstrap, artifact retention and retry-safe exit handling.
 
 ### v2.2 — Ecosystem publishing
 
