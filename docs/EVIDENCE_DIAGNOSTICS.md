@@ -20,7 +20,7 @@ Invalid and stale states are separate:
 - **INVALID** means the file cannot be trusted as the declared compatibility artifact, for example malformed JSON, a schema violation or an invalid timestamp.
 - **STALE** means the structure is valid but the evidence no longer matches the supplied current target, hash, freshness window or lock state.
 
-Every diagnostic contains a stable code, a severity, an optional field path and a concrete remediation hint. `--json` exposes the same information for CI or tooling.
+Every diagnostic contains a stable code, a severity, an optional field path and a concrete remediation hint. `--json` exposes the same information for CI or tooling, including failures in supporting `--evidence`, `--suite-definition` and `--manifests` files.
 
 ## Verify a manifest against current evidence
 
@@ -64,7 +64,7 @@ Use `--max-age-days` when your CI or registry policy requires evidence to be ref
 claude-canary compat diagnose workspace.compat-registry.json --max-age-days 14
 ```
 
-Canary checks manifest `createdAt` values and registry/lock `generatedAt` values. Invalid timestamps are an integrity error. Evidence older than the configured window is valid-but-stale.
+Canary checks manifest `createdAt` values and registry/lock `generatedAt` values. Invalid timestamps are an integrity error. Evidence older than the configured window is valid-but-stale. A timestamp more than five minutes in the future is also treated as stale so clock-skewed or incorrectly generated evidence cannot return a successful preflight.
 
 No freshness window is imposed by default; repositories choose their own policy explicitly.
 
@@ -96,7 +96,9 @@ claude-canary compat diagnose canary.lock \
   --platform linux-x64
 ```
 
-The output distinguishes missing evidence, suite drift and evidence drift. Before replacing a reviewed lock, inspect the semantic change:
+The lock check validates each supplied manifest's component identity, Claude Code release, platform, suite hash and evidence hash. This prevents evidence for another release or operating-system target from satisfying a lock merely because its hashes happen to match.
+
+The output distinguishes missing evidence, target drift, suite drift and evidence drift. Before replacing a reviewed lock, inspect the semantic change:
 
 ```bash
 claude-canary lock diff canary.lock canary.lock.next
@@ -130,4 +132,20 @@ Exit behavior follows Canary's existing categories:
 - `2`: valid but stale (`regression` category);
 - `4`: invalid input/artifact (`configuration` category).
 
-This makes the command suitable as a cheap preflight before publishing a registry, updating a badge, consuming a lockfile or starting a more expensive compatibility workflow.
+Malformed or unreadable support files also produce this structured result when `--json` is requested instead of falling back to a plain-text parser exception.
+
+## TypeScript API
+
+The diagnostics are also exported from the package root:
+
+```ts
+import {
+  diagnoseCompatibilityArtifact,
+  diagnoseCompatibilityFile,
+  formatCompatibilityDiagnostics,
+} from 'claude-code-canary';
+```
+
+The associated `CompatibilityDiagnosticOptions`, `CompatibilityDiagnosticResult` and diagnostic types are exported alongside the functions.
+
+This makes the command and API suitable as cheap preflights before publishing a registry, updating a badge, consuming a lockfile or starting a more expensive compatibility workflow.

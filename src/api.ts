@@ -214,6 +214,19 @@ export type {
   CompatibilityExplanation,
   CompatibilityGraph,
 } from './compatibility.js';
+export {
+  detectCompatibilityArtifactKind,
+  diagnoseCompatibilityArtifact,
+  diagnoseCompatibilityFile,
+  formatCompatibilityDiagnostics,
+} from './compatibility-diagnostics.js';
+export type {
+  CompatibilityArtifactKind,
+  EvidenceDiagnosticSeverity,
+  EvidenceDiagnostic,
+  CompatibilityDiagnosticOptions,
+  CompatibilityDiagnosticResult,
+} from './compatibility-diagnostics.js';
 export { ScenarioPackSchema, inspectScenarioPack, installScenarioPack } from './packs.js';
 export type { ScenarioPack, InspectedScenarioPack } from './packs.js';
 
