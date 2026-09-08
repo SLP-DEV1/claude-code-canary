@@ -1,6 +1,6 @@
 {
   "name": "claude-code-canary",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Deterministic regression testing, release bisection and plugin compatibility matrices for Claude Code",
   "author": "SLP-DEV1",
   "type": "module",
