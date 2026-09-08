@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
   CompatibilityRegistrySchema,
   compareVersion,
   loadCompatibilityRegistry,
+  sha256Canonical,
   type CompatibilityManifest,
   type CompatibilityRegistry,
 } from './compatibility.js';
@@ -16,6 +17,7 @@ export const StaticRegistryReleaseSchema = z.object({
   createdAt: z.string().min(1),
   evidenceHash: z.string().regex(/^[0-9a-f]{64}$/),
   suiteHash: z.string().regex(/^[0-9a-f]{64}$/),
+  manifestHash: z.string().regex(/^[0-9a-f]{64}$/),
   manifest: z.string().min(1),
 }).strict();
 
@@ -82,8 +84,12 @@ function normalizeBaseUrl(value?: string): string | undefined {
   return parsed.toString().replace(/\/$/, '');
 }
 
+function manifestHash(manifest: CompatibilityManifest): string {
+  return sha256Canonical(manifest);
+}
+
 function manifestPath(manifest: CompatibilityManifest): string {
-  return `manifests/${manifest.evidenceHash}.json`;
+  return `manifests/${manifestHash(manifest)}.json`;
 }
 
 function groupKey(manifest: CompatibilityManifest): string {
@@ -106,13 +112,15 @@ export function buildStaticRegistryIndex(
       platform: manifest.platform,
       releases: [],
     };
+    const fullManifestHash = manifestHash(manifest);
     group.releases.push({
       claudeCode: manifest.claudeCode,
       result: manifest.result,
       createdAt: manifest.createdAt,
       evidenceHash: manifest.evidenceHash,
       suiteHash: manifest.suiteHash,
-      manifest: manifestPath(manifest),
+      manifestHash: fullManifestHash,
+      manifest: `manifests/${fullManifestHash}.json`,
     });
     groups.set(key, group);
   }
@@ -120,7 +128,7 @@ export function buildStaticRegistryIndex(
   const components = [...groups.values()]
     .map((group) => ({
       ...group,
-      releases: [...group.releases].sort((a, b) => compareVersion(b.claudeCode, a.claudeCode) || a.evidenceHash.localeCompare(b.evidenceHash)),
+      releases: [...group.releases].sort((a, b) => compareVersion(b.claudeCode, a.claudeCode) || a.manifestHash.localeCompare(b.manifestHash)),
     }))
     .sort((a, b) =>
       a.component.localeCompare(b.component) ||
@@ -227,7 +235,7 @@ export async function publishCompatibilityRegistry(
   await writePublishedFile(outputDir, 'registry.json', json(registry), contents);
   await writePublishedFile(outputDir, 'index.json', json(index), contents);
 
-  const manifests = [...registry.manifests].sort((a, b) => a.evidenceHash.localeCompare(b.evidenceHash));
+  const manifests = [...registry.manifests].sort((a, b) => manifestHash(a).localeCompare(manifestHash(b)));
   const seen = new Set<string>();
   for (const manifest of manifests) {
     const relative = manifestPath(manifest);
@@ -242,7 +250,6 @@ export async function publishCompatibilityRegistry(
   await writePublishedFile(outputDir, '.nojekyll', '', contents);
 
   const checksumLines = [...contents.entries()]
-    .filter(([relative]) => relative !== 'SHA256SUMS')
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([relative, content]) => `${sha256Text(content)}  ${relative}`);
   const checksumContent = `${checksumLines.join('\n')}\n`;
@@ -282,7 +289,7 @@ export async function runRegistryPublishCli(args: string[]): Promise<void> {
     console.log(help());
     return;
   }
-  const registryFile = args.find((value, index) => index === 0 && !value.startsWith('-'));
+  const registryFile = args[0] && !args[0].startsWith('-') ? args[0] : undefined;
   if (!registryFile) throw new Error('registry publish requires a registry JSON file.');
   const output = valueAfter(args, '--output') ?? '.canary/registry-site';
   const result = await publishCompatibilityRegistry(registryFile, output, {
