@@ -6,7 +6,7 @@ Claude Code Canary exists to answer one question reliably:
 
 ## Status
 
-The roadmap from v1.3 through v2.0 is implemented in the v2 compatibility platform. The v2.0.0 release unifies release watching, scenario suites, compatibility evidence, CI reporting, trust regression testing and programmatic compatibility queries behind one local-first toolchain.
+The roadmap from v1.3 through v2.2 is implemented in the v2 compatibility platform. The v2.0.0 release unified release watching, scenario suites, compatibility evidence, CI reporting, trust regression testing and programmatic compatibility queries behind one local-first toolchain; v2.1 and v2.2 deepen developer experience and ecosystem publishing on top of that contract.
 
 | Milestone | Status | Shipped outcome |
 | --- | --- | --- |
@@ -15,6 +15,8 @@ The roadmap from v1.3 through v2.0 is implemented in the v2 compatibility platfo
 | **v1.5** | ✅ Complete | Compatibility manifests, `canary.lock`, open registries, evidence-derived badges and inspectable scenario packs. |
 | **v1.6** | ✅ Complete | Permission-policy coverage, hook/monitor trust checks, isolated MCP fixtures, gateway matrices and signed/checksummed attestations. |
 | **v2.0** | ✅ Complete | Versioned public schemas, compatibility query/explain APIs, compatibility graph, multi-registry aggregation and the expanded TypeScript API. |
+| **v2.1** | ✅ Complete | Suite bootstrap/migration, semantic evidence diffs, large-report navigation, workspace examples, evidence diagnostics and scheduled release watching. |
+| **v2.2** | ✅ Complete | Static registries, signed manifests, community pack metadata/catalogs, evidence-backed badges and conflict-aware registry exchange. |
 
 The implementation remains local-first: core compatibility workflows do not require a Canary-hosted service, and portable evidence excludes prompts, transcripts, credentials and raw environment values by default.
 
@@ -48,10 +50,10 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 ### v2.2 — Ecosystem publishing
 
 - ✅ first-class static registry publishing for GitHub Pages/Releases with content-addressed manifests, deterministic checksums, CLI/API helpers and a parser-validated Pages workflow;
-- signed compatibility-manifest publishing workflow;
-- reusable community scenario-pack discovery metadata;
-- evidence-backed compatibility badge generation and publishing;
-- import/export tooling between independent registries.
+- ✅ deterministic Ed25519 compatibility-manifest signing and verification with a pinned, verify-before-upload GitHub Release workflow;
+- ✅ reusable community scenario-pack discovery metadata and deterministic multi-pack catalogs derived from verified pack contents;
+- ✅ locally generated evidence-backed SVG badges with machine-readable manifest/evidence bindings and publishable Markdown;
+- ✅ conflict-aware registry import/export with filtered subsets, full-manifest identity, collision-safe deduplication and explicit contradictory-result handling.
 
 ### v2.3 — Scale
 
