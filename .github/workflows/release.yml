@@ -28,9 +28,11 @@ jobs:
       - name: Resolve and validate release tag
         id: release
         shell: bash
+        env:
+          RELEASE_INPUT_TAG: ${{ inputs.tag }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            tag='${{ inputs.tag }}'
+            tag="$RELEASE_INPUT_TAG"
           else
             tag="$GITHUB_REF_NAME"
           fi

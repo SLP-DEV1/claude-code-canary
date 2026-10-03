@@ -205,6 +205,11 @@ jobs:
       - name: Write live E2E summary
         if: always() && steps.auth.outputs.configured == 'true'
         shell: bash
+        env:
+          PRIMARY_PROVIDER: ${{ steps.provider.outputs['primary-provider'] || 'not completed' }}
+          PROVIDER_USED: ${{ steps.provider.outputs.provider || 'not completed' }}
+          MODEL_USED: ${{ steps.provider.outputs.model || 'not completed' }}
+          FALLBACK_USED: ${{ steps.provider.outputs['fallback-used'] || 'false' }}
         run: |
           {
             echo "### Live Claude E2E"
@@ -213,9 +218,9 @@ jobs:
             echo "- Release-evidence run name: \`Live Claude E2E ($E2E_MODE)\`"
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Claude Code: \`$(claude --version 2>/dev/null || echo unavailable)\`"
-            echo "- Primary provider: \`${{ steps.provider.outputs['primary-provider'] || 'not completed' }}\`"
-            echo "- Provider used: \`${{ steps.provider.outputs.provider || 'not completed' }}\`"
-            echo "- Model: \`${{ steps.provider.outputs.model || 'not completed' }}\`"
-            echo "- Capacity fallback used: \`${{ steps.provider.outputs['fallback-used'] || 'false' }}\`"
+            printf '%s\n' "- Primary provider: \`$PRIMARY_PROVIDER\`"
+            printf '%s\n' "- Provider used: \`$PROVIDER_USED\`"
+            printf '%s\n' "- Model: \`$MODEL_USED\`"
+            printf '%s\n' "- Capacity fallback used: \`$FALLBACK_USED\`"
             echo "- CLI fixture results: \`${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results\`"
           } >> "$GITHUB_STEP_SUMMARY"

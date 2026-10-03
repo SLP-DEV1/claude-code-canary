@@ -77,10 +77,10 @@ async function makeFixture() {
     : '';
 
   await write('README.md', '# Claude Canary live E2E fixture\n\nThis repository is disposable and exists only for live compatibility tests.\n');
-  await write('seed.txt', 'seed\n');
+  await write('seed.txt', 'LIVE_CANARY_SEED_7F2D91\n');
   await write('.claude/settings.json', `${JSON.stringify({ permissions: { allow: ['Read', 'Write', 'Edit'] } }, null, 2)}\n`);
   await write('.canary/.gitignore', 'results/\nrecordings/\nrepro-live/\nplugins/\n');
-  await write('.canary/live.canary.yml', `version: 1\nname: live-claude-e2e\nprompt: |\n  Create a file named result.txt in the repository root containing exactly the single line CANARY_OK.\n  Do not modify, delete, or create any other repository file.\nclaude:\n  executable: claude\n${modelLine}  permission_mode: bypassPermissions\n  max_turns: 10\n  timeout_seconds: 240\nverify:\n  commands:\n    - node -e \"const fs=require('fs'); const v=fs.readFileSync('result.txt','utf8').trim(); if(v!=='CANARY_OK') process.exit(1)\"\nexpect:\n  changed_files:\n    allow:\n      - result.txt\n    require:\n      - result.txt\n    deny: []\n  files_exist:\n    - result.txt\n  file_contains:\n    - path: result.txt\n      text: CANARY_OK\nlimits:\n  max_tool_calls: 20\n  max_total_tokens: 120000\n`);
+  await write('.canary/live.canary.yml', `version: 1\nname: live-claude-e2e\nprompt: |\n  Read seed.txt from the repository root using the available file-reading tool.\n  Reply with the exact contents of seed.txt and nothing else.\n  Do not modify, delete, or create any repository file.\nclaude:\n  executable: claude\n${modelLine}  permission_mode: bypassPermissions\n  max_turns: 10\n  timeout_seconds: 240\nexpect:\n  changed_files:\n    deny:\n      - "**"\n  claude_output_contains:\n    - LIVE_CANARY_SEED_7F2D91\nlimits:\n  max_tool_calls: 20\n  max_total_tokens: 120000\n`);
 
   await write('variants/baseline/CLAUDE.md', 'For this test, follow the user request exactly and make the smallest possible change.\n');
   await write('variants/candidate/CLAUDE.md', 'For this test, follow the user request exactly and make the smallest possible change.\n');
