@@ -6,7 +6,7 @@ Claude Code Canary exists to answer one question reliably:
 
 ## Status
 
-The roadmap from v1.3 through v2.2 is implemented in the v2 compatibility platform. The v2.0.0 release unified release watching, scenario suites, compatibility evidence, CI reporting, trust regression testing and programmatic compatibility queries behind one local-first toolchain; v2.1 and v2.2 deepen developer experience and ecosystem publishing on top of that contract.
+The v2 compatibility platform is implemented through the v2.1 scope. Work originally planned as a separate v2.2 ecosystem-publishing milestone was completed ahead of schedule and is included in v2.1.0. The next minor line therefore focuses on scale and orchestration rather than repackaging already-shipped functionality.
 
 | Milestone | Status | Shipped outcome |
 | --- | --- | --- |
@@ -15,12 +15,12 @@ The roadmap from v1.3 through v2.2 is implemented in the v2 compatibility platfo
 | **v1.5** | ✅ Complete | Compatibility manifests, `canary.lock`, open registries, evidence-derived badges and inspectable scenario packs. |
 | **v1.6** | ✅ Complete | Permission-policy coverage, hook/monitor trust checks, isolated MCP fixtures, gateway matrices and signed/checksummed attestations. |
 | **v2.0** | ✅ Complete | Versioned public schemas, compatibility query/explain APIs, compatibility graph, multi-registry aggregation and the expanded TypeScript API. |
-| **v2.1** | ✅ Complete | Suite bootstrap/migration, semantic evidence diffs, large-report navigation, workspace examples, evidence diagnostics and scheduled release watching. |
-| **v2.2** | ✅ Complete | Static registries, signed manifests, community pack metadata/catalogs, evidence-backed badges and conflict-aware registry exchange. |
+| **v2.1** | ✅ Implementation complete | Developer-experience workflows plus static registries, signed manifests, community pack catalogs, evidence-backed badges and conflict-aware registry exchange. |
+| **v2.2** | 🧭 Planned | Scale work: shard merging, stronger caching, incremental planning, bounded DAG orchestration and compact historical indexes. |
 
 The implementation remains local-first: core compatibility workflows do not require a Canary-hosted service, and portable evidence excludes prompts, transcripts, credentials and raw environment values by default.
 
-## v2.0 release contract
+## v2 release contract
 
 The v2 major keeps the existing deterministic scenario model and old CLI workflows while adding a v2 command surface and public compatibility contracts.
 
@@ -35,9 +35,9 @@ Key guarantees:
 
 ## Post-v2 direction
 
-The next work should deepen usability and ecosystem adoption rather than re-create the compatibility core.
+The next work should deepen usability, ecosystem adoption and scale rather than re-create the compatibility core.
 
-### v2.1 — Developer experience
+### v2.1 — Developer experience and ecosystem publishing
 
 - ✅ interactive `suite init` bootstrap with deterministic non-interactive flags;
 - ✅ `suite migrate` helpers for legacy suite layouts with dry-run, fail-closed mapping and safe in-place backups;
@@ -45,17 +45,16 @@ The next work should deepen usability and ecosystem adoption rather than re-crea
 - ✅ richer static `report` navigation for large suites with search, filters, sorting, pagination and suite progress summaries;
 - ✅ documented, parser-validated examples for monorepos and multi-plugin workspaces with affected-path selection patterns;
 - ✅ fast `compat diagnose` diagnostics for invalid/stale manifests, registries and lockfiles with actionable fixes and CI-friendly JSON;
-- ✅ end-to-end scheduled GitHub Actions `watch` example with persisted state, explicit known-good bootstrap, artifact retention and retry-safe exit handling.
-
-### v2.2 — Ecosystem publishing
-
+- ✅ end-to-end scheduled GitHub Actions `watch` example with persisted state, explicit known-good bootstrap, artifact retention and retry-safe exit handling;
 - ✅ first-class static registry publishing for GitHub Pages/Releases with content-addressed manifests, deterministic checksums, CLI/API helpers and a parser-validated Pages workflow;
 - ✅ deterministic Ed25519 compatibility-manifest signing and verification with a pinned, verify-before-upload GitHub Release workflow;
 - ✅ reusable community scenario-pack discovery metadata and deterministic multi-pack catalogs derived from verified pack contents;
 - ✅ locally generated evidence-backed SVG badges with machine-readable manifest/evidence bindings and publishable Markdown;
 - ✅ conflict-aware registry import/export with filtered subsets, full-manifest identity, collision-safe deduplication and explicit contradictory-result handling.
 
-### v2.3 — Scale
+The ecosystem-publishing items above were originally planned as v2.2 work and were delivered early in v2.1.0.
+
+### v2.2 — Scale
 
 - shard-result merge as a first-class CLI operation;
 - more aggressive compatibility-safe local/CI caching;
