@@ -10,7 +10,7 @@ Unit tests and CLI smoke tests are necessary, but they cannot detect upstream Cl
 - `doctor`
 - `init` and `validate`
 - `versions install latest` and `versions list`
-- a real isolated `run` that must create exactly one expected file
+- a real isolated read-only `run` that must read a repository-only seed marker and return it without changing files
 - `compare` with two real Claude executions
 - `plugin-init`
 
@@ -24,7 +24,7 @@ Unit tests and CLI smoke tests are necessary, but they cannot detect upstream Cl
 - `plugin-suite` against the newest published Claude Code release
 - a self-test of the repository's composite GitHub Action in `run` mode
 
-The generated fixture is deliberately tiny. Write-capable scenarios use `bypassPermissions` only inside the disposable fixture and assert that Claude changes exactly the requested file. Generated plugin tests remain read-only. The live harness raises generated plugin scenarios from their normal 80,000-token guardrail to 200,000 tokens because current Claude Code system/tool context can legitimately exceed the normal smoke-test budget. This override is live-E2E-only and does not change the product default.
+The generated fixture is deliberately tiny. The core `run`/`compare` scenario is read-only: the prompt does not contain the expected marker, so Claude must use the repository file-reading tool to read `seed.txt`, return the marker and leave the worktree unchanged. Write-capable full-suite scenarios use `bypassPermissions` only inside the disposable fixture and assert that Claude changes exactly the requested file. Generated plugin tests remain read-only. The live harness raises generated plugin scenarios from their normal 80,000-token guardrail to 200,000 tokens because current Claude Code system/tool context can legitimately exceed the normal smoke-test budget. This override is live-E2E-only and does not change the product default.
 
 ## Free-provider GitHub Actions path
 
@@ -126,7 +126,7 @@ Live Claude E2E (core)
 Live Claude E2E (full)
 ```
 
-The `full` form is part of the v1.x release contract. `.github/workflows/release.yml` queries GitHub Actions before publication and requires a successful `Live Claude E2E (full)` run whose `head_sha` exactly matches the immutable release commit. A successful full run on an older or newer commit does not satisfy the gate.
+The `full` form is part of the v2 release contract. `.github/workflows/release.yml` queries GitHub Actions before publication and requires a successful `Live Claude E2E (full)` run whose `head_sha` exactly matches the immutable release commit. A successful full run on an older or newer commit does not satisfy the gate.
 
 The workflow installs current Claude Code using Anthropic's Linux installer, builds the checked-out Canary commit, builds the pinned provider router, preserves live result/provider artifacts, and records the primary provider, provider/model actually used and whether a capacity fallback was needed in the GitHub Step Summary.
 
