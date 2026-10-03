@@ -4,7 +4,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-09-08
+## [2.1.0] - 2026-10-03
 
 ### Added
 
@@ -21,6 +21,8 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - Treat materially future-dated evidence as stale and keep auxiliary `compat diagnose --json` failures machine-readable.
 - Preserve distinct registry manifests that reference the same `evidenceHash` by deduplicating on canonical full-manifest identity.
 - Continue publishing the v2 Action channel through the floating `v2` tag after a successful stable release.
+- Stabilize the provider-backed live release gate with a read-only seed-file scenario so `run`/`compare` still exercise real Claude tool use without depending on duplicate stochastic file writes.
+- Harden release and live-summary shell boundaries by passing GitHub expression values through environment variables before shell parsing.
 
 ### Release integrity
 
