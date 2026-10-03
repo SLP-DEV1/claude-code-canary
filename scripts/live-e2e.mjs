@@ -175,7 +175,12 @@ async function fullSuite() {
   // results/plugins remain ignored and all tracked fixture files stay untouched.
   await rm(path.join(fixture, '.canary', 'generated.canary.yml'), { force: true });
 
-  const recordingPrompt = 'Create recorded.txt in the repository root containing exactly the single line RECORDED_OK. Do not modify any other file.';
+  // Record/replay should exercise the real Claude invocation and exact-start-state
+  // machinery without requiring two independent model runs to make the same edit.
+  // The Claude task stays read-only; a harness-owned marker gives `save` a
+  // deterministic changed file, and the recorded setup recreates that marker
+  // before replay.
+  const recordingPrompt = 'Read seed.txt from the repository root and reply with its exact contents. Do not modify, delete, or create any repository file.';
   canary(['record', 'live-record', '--prompt', recordingPrompt, '--executable', claude]);
   run(claude, [
     '-p', recordingPrompt,
@@ -183,10 +188,16 @@ async function fullSuite() {
     '--max-turns', '10',
     '--no-session-persistence',
   ], { cwd: fixture });
+  run('git', ['reset', '--hard', 'HEAD'], { cwd: fixture });
+  run('git', ['clean', '-fd'], { cwd: fixture });
+  await write('recorded-fixture.txt', 'RECORDED_FIXTURE_OK');
+  const replaySetup = `node -e "require('fs').writeFileSync('recorded-fixture.txt','RECORDED_FIXTURE_OK')"`;
+  const replayVerify = `node -e "const fs=require('fs'); if(fs.readFileSync('recorded-fixture.txt','utf8').trim()!=='RECORDED_FIXTURE_OK'||fs.readFileSync('seed.txt','utf8').trim()!=='LIVE_CANARY_SEED_7F2D91') process.exit(1)"`;
   canary([
     'save', 'live-record',
     '--output', '.canary/recorded.canary.yml',
-    '--verify', `node -e \"const fs=require('fs'); if(fs.readFileSync('recorded.txt','utf8').trim()!=='RECORDED_OK') process.exit(1)\"`,
+    '--setup', replaySetup,
+    '--verify', replayVerify,
   ]);
   canary(['replay', '.canary/recorded.canary.yml', '--executable', claude]);
 

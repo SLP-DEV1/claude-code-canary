@@ -31,4 +31,15 @@ describe('release and live E2E hardening', () => {
     expect(driver).toContain('Do not modify, delete, or create any repository file.');
     expect(driver).not.toContain('Create a file named result.txt');
   });
+  it('keeps live record/replay deterministic without requiring Claude to repeat a file edit', async () => {
+    const driver = await readFile('scripts/live-e2e.mjs', 'utf8');
+
+    expect(driver).toContain("await write('recorded-fixture.txt', 'RECORDED_FIXTURE_OK')");
+    expect(driver).toContain("run('git', ['reset', '--hard', 'HEAD']");
+    expect(driver).toContain("'--setup', replaySetup");
+    expect(driver).toContain("'--verify', replayVerify");
+    expect(driver).toContain("const recordingPrompt = 'Read seed.txt");
+    expect(driver).not.toContain("Create recorded.txt in the repository root");
+  });
+
 });
