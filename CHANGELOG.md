@@ -22,6 +22,7 @@ All notable changes to Claude Code Canary are documented here. Semantic Versioni
 - Preserve distinct registry manifests that reference the same `evidenceHash` by deduplicating on canonical full-manifest identity.
 - Continue publishing the v2 Action channel through the floating `v2` tag after a successful stable release.
 - Stabilize the provider-backed live release gate with a read-only seed-file scenario so `run`/`compare` still exercise real Claude tool use without depending on duplicate stochastic file writes.
+- Make the full live `record`/`save`/`replay` path deterministic with a harness-owned replay marker while keeping the real Claude task read-only, so stochastic repeated edits cannot block publication.
 - Harden release and live-summary shell boundaries by passing GitHub expression values through environment variables before shell parsing.
 
 ### Release integrity
