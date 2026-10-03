@@ -20,11 +20,13 @@ Unit tests and CLI smoke tests are necessary, but they cannot detect upstream Cl
 - executable `bisect` with a real known-good Claude endpoint and an intentionally invalid known-bad endpoint
 - `record`, a real Claude task, `save`, and `replay`
 - `repro` from the intentionally failed bisect artifact
-- `plugin-matrix` against the newest published Claude Code release
-- `plugin-suite` against the newest published Claude Code release
+- fail-closed `plugin-matrix` coverage for every generated live plugin scenario against the pinned Claude Code release
+- a report-only `plugin-suite` orchestration pass over the same generated suite
 - a self-test of the repository's composite GitHub Action in `run` mode
 
 The generated fixture is deliberately tiny. The core `run`/`compare` scenario is read-only: the prompt does not contain the expected marker, so Claude must use the repository file-reading tool to read `seed.txt`, return the marker and leave the worktree unchanged. The full-suite record/replay check also keeps the Claude task read-only; after the initial real task, the harness resets any incidental workspace edits and creates one harness-owned marker that `save` records, while the generated setup command recreates that marker before `replay`. This exercises recording metadata, exact-start-state replay and verification without requiring two independent model runs to reproduce the same edit. Other write-capable full-suite scenarios use `bypassPermissions` only inside the disposable fixture and assert their requested changes. Generated plugin tests remain read-only. The live harness raises generated plugin scenarios from their normal 80,000-token guardrail to 200,000 tokens because current Claude Code system/tool context can legitimately exceed the normal smoke-test budget. This override is live-E2E-only and does not change the product default.
+
+For plugin coverage, every generated scenario is first run once through fail-closed `plugin-matrix`, so a real scenario incompatibility still blocks the release. `plugin-suite` then runs with `--allow-incompatible` to exercise suite discovery, aggregation and report generation without making duplicate live model executions a second stochastic release gate. Structural or orchestration errors in `plugin-suite` still fail the E2E.
 
 ## Free-provider GitHub Actions path
 
