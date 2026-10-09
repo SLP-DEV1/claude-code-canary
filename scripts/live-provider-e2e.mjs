@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isTerminalProviderCapacityFailure, terminalModelRequestStatus } from './provider-capacity.mjs';
+import { canFallbackAfter, configuredProviderOrder, isTerminalProviderCapacityFailure, terminalModelRequestStatus } from './provider-capacity.mjs';
 
 const action = process.argv[2] ?? 'run';
 const mode = process.argv[3] ?? 'core';
@@ -212,67 +212,69 @@ async function runSuite(providerName) {
   }
 }
 
-async function tryPrimaryWithOpenRouterFallback(primaryName, hasOpenRouter) {
-  const primary = await runSuite(primaryName);
-  if (primary.ok) {
-    return { selected: primaryName, fallbackUsed: false };
-  }
-
-  if (hasOpenRouter && primary.capacityFailure) {
-    console.warn(`\n${primaryName} hit a provider capacity/availability limit. Retrying the complete live suite through OpenRouter.`);
-    const fallback = await runSuite('openrouter');
-    if (!fallback.ok) throw new Error(`OpenRouter fallback failed with exit code ${fallback.status}.`);
-    return { selected: 'openrouter', fallbackUsed: true };
-  }
-
-  throw new Error(
-    `${primaryName} live suite failed with exit code ${primary.status}; ` +
-    'not falling back because this does not look like a provider capacity/availability failure.',
-  );
-}
-
 async function runWithFallback() {
   await mkdir(providerRoot, { recursive: true });
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY);
-  const hasGroq = Boolean(process.env.GROQ_API_KEY);
-  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
-  if (!hasGemini && !hasGroq && !hasOpenRouter) {
+  const order = configuredProviderOrder({
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+    openrouter: Boolean(process.env.OPENROUTER_API_KEY),
+    groq: Boolean(process.env.GROQ_API_KEY),
+  });
+  if (order.length === 0) {
     throw new Error('Configure GEMINI_API_KEY, GROQ_API_KEY and/or OPENROUTER_API_KEY.');
   }
 
-  // Gemini is preferred for hosted free E2E because current Claude Code requests
-  // routinely exceed Groq Free's input-token-per-minute allowance. Groq remains
-  // supported for existing setups when Gemini is not configured.
-  let primaryProvider;
-  let result;
-  if (hasGemini) {
-    primaryProvider = 'gemini';
-    result = await tryPrimaryWithOpenRouterFallback('gemini', hasOpenRouter);
-  } else if (hasGroq) {
-    primaryProvider = 'groq';
-    result = await tryPrimaryWithOpenRouterFallback('groq', hasOpenRouter);
-  } else {
-    primaryProvider = 'openrouter';
-    const fallback = await runSuite('openrouter');
-    if (!fallback.ok) throw new Error(`OpenRouter live suite failed with exit code ${fallback.status}.`);
-    result = { selected: 'openrouter', fallbackUsed: false };
-  }
+  const primaryProvider = order[0];
+  const attempts = [];
+  const attemptsPath = path.join(providerRoot, 'attempts.json');
 
-  const selection = {
-    primaryProvider,
-    provider: result.selected,
-    model: providers[result.selected].model,
-    fallbackUsed: result.fallbackUsed,
-    selectedAt: new Date().toISOString(),
-  };
-  await writeFile(selectedPath, `${JSON.stringify(selection, null, 2)}\n`, 'utf8');
-  appendGithubFile(process.env.GITHUB_OUTPUT, {
-    'primary-provider': selection.primaryProvider,
-    provider: selection.provider,
-    model: selection.model,
-    'fallback-used': selection.fallbackUsed,
-  });
-  console.log(`\nProvider-backed Live E2E passed via ${selection.provider} / ${selection.model}.`);
+  for (const [index, providerName] of order.entries()) {
+    let result;
+    try {
+      result = await runSuite(providerName);
+    } catch (error) {
+      // Do not serialize exception text: upstream errors can contain credentials.
+      attempts.push({ provider: providerName, status: null, outcome: 'router-error' });
+      await writeFile(attemptsPath, `${JSON.stringify(attempts, null, 2)}\n`, 'utf8');
+      throw error;
+    }
+
+    attempts.push({
+      provider: providerName,
+      status: result.providerStatus ?? null,
+      outcome: result.ok ? 'passed' : result.capacityFailure ? 'capacity-failure' : 'test-failure',
+    });
+    // Safe, allowlisted status metadata allows diagnosing failed provider selection.
+    await writeFile(attemptsPath, `${JSON.stringify(attempts, null, 2)}\n`, 'utf8');
+
+    if (result.ok) {
+      const selection = {
+        primaryProvider,
+        provider: providerName,
+        model: providers[providerName].model,
+        fallbackUsed: index > 0,
+        selectedAt: new Date().toISOString(),
+      };
+      await writeFile(selectedPath, `${JSON.stringify(selection, null, 2)}\n`, 'utf8');
+      appendGithubFile(process.env.GITHUB_OUTPUT, {
+        'primary-provider': selection.primaryProvider,
+        provider: selection.provider,
+        model: selection.model,
+        'fallback-used': selection.fallbackUsed,
+      });
+      console.log(`\nProvider-backed Live E2E passed via ${selection.provider} / ${selection.model}.`);
+      return;
+    }
+
+    const hasNext = index + 1 < order.length;
+    if (!canFallbackAfter(result, hasNext)) {
+      if (result.capacityFailure) {
+        throw new Error(`All ${order.length} configured providers exhausted or unavailable; the release gate remains closed.`);
+      }
+      throw new Error(`${providerName} live suite failed with exit code ${result.status}; not a provider capacity/availability failure. Release gate remains closed.`);
+    }
+
+    console.warn(`\n${providerName} returned a terminal provider capacity/availability error. Trying ${order[index + 1]} with a fresh fixture.`);
+  }
 }
 
 async function startSelected() {
@@ -294,20 +296,38 @@ async function startSelected() {
 }
 
 async function diagnoseSelected() {
-  const selected = JSON.parse(await readFile(selectedPath, 'utf8'));
-  if (!providers[selected.provider]) throw new Error('Invalid selected live provider');
-  const logPath = path.join(providerRoot, `ccasr-${selected.provider}.log`);
-  let log = '';
-  try { log = await readFile(logPath, 'utf8'); } catch { /* no router log */ }
-  const status = terminalModelRequestStatus(log);
-  const description = status === 429
-    ? 'Provider request limit/quota exhausted (HTTP 429); no Canary regression established.'
-    : status === 503
-      ? 'Provider temporarily unavailable (HTTP 503); no Canary regression established.'
-      : 'No terminal provider capacity error detected; investigate the Canary Action result.';
-  console.log(`Action self-test diagnosis: ${description}`);
+  // This step also runs after the *provider CLI* stage fails, before a
+  // selected.json has ever been created. Never obscure the original failure.
+  let selected;
+  try { selected = JSON.parse(await readFile(selectedPath, 'utf8')); } catch { /* no selected provider */ }
+
+  let description;
+  if (selected && providers[selected.provider]) {
+    const logPath = path.join(providerRoot, `ccasr-${selected.provider}.log`);
+    let log = '';
+    try { log = await readFile(logPath, 'utf8'); } catch { /* no router log */ }
+    const status = terminalModelRequestStatus(log);
+    description = status === 429
+      ? 'Action self-test: selected provider exhausted its quota (HTTP 429).'
+      : status === 503
+        ? 'Action self-test: selected provider unavailable (HTTP 503).'
+        : 'Action self-test: no terminal capacity error found; inspect the Canary result.';
+  } else {
+    let attempts = [];
+    try {
+      const parsed = JSON.parse(await readFile(path.join(providerRoot, 'attempts.json'), 'utf8'));
+      if (Array.isArray(parsed)) attempts = parsed;
+    } catch { /* provider selection may fail before its first attempt */ }
+    const safe = attempts.filter((attempt) =>
+      providers[attempt.provider] && ['passed', 'capacity-failure', 'test-failure', 'router-error'].includes(attempt.outcome)
+    );
+    description = safe.length > 0
+      ? `Provider CLI stage: ${safe.map((attempt) => `${attempt.provider}: ${attempt.outcome}${Number.isInteger(attempt.status) ? ` (HTTP ${attempt.status})` : ''}`).join('; ')}.`
+      : 'Provider CLI stage failed before any provider completed; inspect preceding workflow steps.';
+  }
+  console.log(`Live E2E diagnosis: ${description}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
-    writeFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Action self-test diagnosis\n\n${description}\n`, { flag: 'a' });
+    writeFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Live E2E failure diagnosis\n\n${description}\n`, { flag: 'a' });
   }
 }
 
