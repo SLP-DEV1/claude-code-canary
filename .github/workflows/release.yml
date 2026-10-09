@@ -174,6 +174,12 @@ jobs:
               throw error;
             }
           }
+          const manual = process.env.GITHUB_EVENT_NAME === 'push' && process.env.GITHUB_REF === 'refs/heads/main';
+          const approval = manual ? JSON.parse(readFileSync('.github/manual-release-v2.1.0.json', 'utf8')) : {};
+          // The previous attempt returned npm's accepted/processing response and
+          // signed provenance. Do not submit the identical immutable version twice.
+          const skipUpload = manual && approval.tag === 'v2.1.0' && approval.npmUploadAcknowledged === true;
+          appendFileSync(process.env.GITHUB_OUTPUT, `skip_upload=${skipUpload}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `package=${pkg.name}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
@@ -181,7 +187,7 @@ jobs:
           NODE
 
       - name: Publish package
-        if: steps.npm.outputs.published != 'true'
+        if: steps.npm.outputs.published != 'true' && steps.npm.outputs.skip_upload != 'true'
         env:
           # OIDC Trusted Publishing is preferred. NPM_TOKEN is retained only as
           # an optional bootstrap fallback while the npm trusted publisher is configured.
@@ -202,14 +208,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4 5; do
+          for attempt in $(seq 1 40); do
             visible="$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --json 2>/dev/null || true)"
             if [[ "$visible" == "\"$PACKAGE_VERSION\"" || "$visible" == "$PACKAGE_VERSION" ]]; then
               echo "$PACKAGE_NAME@$PACKAGE_VERSION is visible on npm."
               exit 0
             fi
-            echo "npm registry has not exposed $PACKAGE_NAME@$PACKAGE_VERSION yet (attempt $attempt/5)."
-            sleep 3
+            echo "npm registry has not exposed $PACKAGE_NAME@$PACKAGE_VERSION yet (attempt $attempt/40)."
+            sleep 15
           done
           echo "Published package could not be verified in the npm registry." >&2
           exit 1
