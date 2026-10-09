@@ -99,13 +99,13 @@ export async function filterFixtureChanges(
  * stream-json can contain prompts, credentials and environment values.
  */
 export function classifyClaudeFailure(output: string): string | undefined {
-  if (/(?:provider error[^\\n]*|api error[^\\n]*|\\b)(?:429\\b|rate[ _-]?limit|quota|resource[_ -]?exhausted)/i.test(output)) {
+  if (/(?:provider error[^\n]*|api error[^\n]*|\b)(?:429\b|rate[ _-]?limit|quota|resource[_ -]?exhausted)/i.test(output)) {
     return 'upstream provider rate limit/quota';
   }
-  if (/(?:provider error[^\\n]*|api error[^\\n]*|\\b)(?:503\\b|service unavailable|overloaded|high demand)/i.test(output)) {
+  if (/(?:provider error[^\n]*|api error[^\n]*|\b)(?:503\b|service unavailable|overloaded|high demand)/i.test(output)) {
     return 'upstream provider unavailable';
   }
-  if (/\\b(?:ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET)\\b/.test(output)) return 'network/connection error';
+  if (/\b(?:ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET)\b/.test(output)) return 'network/connection error';
   return undefined;
 }
 
