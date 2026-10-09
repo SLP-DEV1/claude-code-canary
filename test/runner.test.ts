@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { parseScenario } from '../src/config.js';
-import { buildClaudeArgs } from '../src/runner.js';
+import { buildClaudeArgs, classifyClaudeFailure } from '../src/runner.js';
+
+describe('privacy-preserving Claude failure diagnostics', () => {
+  it('recognizes capacity failures without persisting raw credentials or errors', () => {
+    expect(classifyClaudeFailure('Provider error (openrouter): 429 rate limit exceeded for token secret')).toBe('upstream provider rate limit/quota');
+    expect(classifyClaudeFailure('API Error: 503 Service Unavailable')).toBe('upstream provider unavailable');
+    expect(classifyClaudeFailure('connect ETIMEDOUT')).toBe('network/connection error');
+    expect(classifyClaudeFailure('Exit code 1: assertion mismatch')).toBeUndefined();
+  });
+});
 
 describe('Claude invocation arguments', () => {
   it('always enables verbose when using stream-json output', () => {
