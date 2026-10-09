@@ -35,7 +35,7 @@ Preferred provider path:
 
 1. **Gemini** using `gemini-3.6-flash` when `GEMINI_API_KEY` is configured
 2. **OpenRouter** using `openrouter/free` only if the previous provider fails with an attributable capacity/availability error
-3. **Groq** using `openai/gpt-oss-120b` as a last-resort fallback, only when `GROQ_API_KEY` is configured and OpenRouter is also exhausted/unavailable
+3. **Groq** using `openai/gpt-oss-120b` as a last-resort fallback if configured earlier providers are exhausted/unavailable
 
 If a provider key is absent, that provider is skipped. If only Groq or OpenRouter is configured, the corresponding provider is tried directly. Every subsequent attempt starts the complete live suite with a fresh fixture. **Non-provider errors always fail closed and never trigger fallback.**
 
@@ -105,7 +105,7 @@ Optional model overrides:
 - `CLAUDE_CANARY_OPENROUTER_MODEL` defaults to `openrouter/free`
 - `CLAUDE_CANARY_PROVIDER_PORT` defaults to `3456`
 
-When Gemini is configured it is preferred. Groq is only selected as the primary when Gemini is absent. OpenRouter is used directly when it is the only configured provider, or as the capacity/availability fallback from the selected primary.
+Configured providers are tried in order: Gemini, OpenRouter, then Groq. A provider can become the primary only if all providers ahead of it have no configured key. Fallback requires an attributable terminal upstream capacity error; ordinary Canary regressions stop immediately.
 
 ## GitHub Actions
 
@@ -115,7 +115,7 @@ Configure repository Actions secrets:
 
 - `GEMINI_API_KEY` — recommended primary
 - `OPENROUTER_API_KEY` — recommended capacity/availability fallback
-- `GROQ_API_KEY` — optional backward-compatible provider
+- `GROQ_API_KEY` — optional last-resort provider (free-tier token limits may prevent full E2E)
 
 At least one is required for a manual run. If no secret exists, a scheduled run records a clear skip notice instead of attempting model access. A **manual** run without provider authentication fails deliberately so a skipped manual run can never be mistaken for release evidence. No secret value is printed.
 
