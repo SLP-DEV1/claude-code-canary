@@ -1,7 +1,0 @@
-{
-  "tag": "v2.1.0",
-  "publishWithoutTests": true,
-  "reason": "Explicit repository owner request to publish v2.1.0 without tests on 2026-10-09",
-  "npmUploadAcknowledged": true,
-  "npmPublishEvidence": "GitHub Actions run 37968312521: npm accepted the package, signed provenance and reported processing; visibility check timed out"
-}
