@@ -204,24 +204,16 @@ async function fullSuite() {
   const failedArtifact = await findFailedArtifact();
   canary(['repro', failedArtifact, '--scenario', '.canary/live.canary.yml', '--output', '.canary/repro-live']);
 
-  // Gate each generated plugin scenario exactly once with a fail-closed
-  // matrix. The suite invocation below deliberately exercises discovery,
-  // aggregation and report generation without turning duplicate provider/model
-  // executions into a second stochastic compatibility gate.
-  for (const scenarioFile of ['load.canary.yml', 'command-ping.canary.yml']) {
-    canary([
-      'plugin-matrix', `.canary/plugins/live-e2e/${scenarioFile}`,
-      '--plugin', 'test-plugin',
-      '--versions', testedClaudeVersion,
-    ]);
-  }
+  // Plugin-suite already invokes plugin-matrix internally for each generated
+  // scenario. Do not duplicate those expensive provider-backed runs: on free
+  // tiers that exhausted daily quotas before the final Action self-test.
+  // The suite remains fail-closed for real incompatibilities.
   canary([
     'plugin-suite',
     '--plugin', 'test-plugin',
     '--suite', '.canary/plugins/live-e2e',
     '--versions', testedClaudeVersion,
     '--max-runs', '10',
-    '--allow-incompatible',
   ]);
 }
 
