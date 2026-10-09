@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error Test helper is intentionally plain JS, mirroring the headless provider router.
-import { isTerminalProviderCapacityFailure, terminalModelRequestStatus } from '../scripts/provider-capacity.mjs';
+import { canFallbackAfter, configuredProviderOrder, isTerminalProviderCapacityFailure, terminalModelRequestStatus } from '../scripts/provider-capacity.mjs';
 
 function log(...statuses: number[]): string {
   return statuses.map((status, i) => [
@@ -25,5 +25,21 @@ describe('provider fallback attribution', () => {
     const unrelated = JSON.stringify({ reqId: 'x', res: { statusCode: 429 }, msg: 'unrelated' });
     expect(isTerminalProviderCapacityFailure(log(200) + '\n' + unrelated)).toBe(false);
     expect(isTerminalProviderCapacityFailure('429 quota error elsewhere')).toBe(false);
+  });
+});
+
+describe('release fail-closed provider ordering', () => {
+  it('uses Groq as a third fallback when both Gemini and OpenRouter are exhausted', () => {
+    expect(configuredProviderOrder({ gemini: true, openrouter: true, groq: true }))
+      .toEqual(['gemini', 'openrouter', 'groq']);
+    expect(configuredProviderOrder({ groq: true }))
+      .toEqual(['groq']);
+  });
+
+  it('rejects functional regressions rather than switching providers', () => {
+    expect(canFallbackAfter({ ok: false, capacityFailure: false }, true)).toBe(false);
+    expect(canFallbackAfter({ ok: true, capacityFailure: true }, true)).toBe(false);
+    expect(canFallbackAfter({ ok: false, capacityFailure: true }, false)).toBe(false);
+    expect(canFallbackAfter({ ok: false, capacityFailure: true }, true)).toBe(true);
   });
 });
