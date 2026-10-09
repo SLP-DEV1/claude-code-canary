@@ -94,6 +94,21 @@ export async function filterFixtureChanges(
   return filtered;
 }
 
+/**
+ * Only expose an allowlisted *category* in portable artifacts. Claude stderr and
+ * stream-json can contain prompts, credentials and environment values.
+ */
+export function classifyClaudeFailure(output: string): string | undefined {
+  if (/(?:provider error[^\n]*|api error[^\n]*|\b)(?:429\b|rate[ _-]?limit|quota|resource[_ -]?exhausted)/i.test(output)) {
+    return 'upstream provider rate limit/quota';
+  }
+  if (/(?:provider error[^\n]*|api error[^\n]*|\b)(?:503\b|service unavailable|overloaded|high demand)/i.test(output)) {
+    return 'upstream provider unavailable';
+  }
+  if (/\b(?:ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET)\b/.test(output)) return 'network/connection error';
+  return undefined;
+}
+
 export async function runScenario(scenario: Scenario, options: RunOptions = {}): Promise<RunResult> {
   const invocationDir = options.cwd ?? process.cwd();
   const repoRoot = await getRepoRoot(invocationDir);
@@ -156,7 +171,10 @@ export async function runScenario(scenario: Scenario, options: RunOptions = {}):
 
       if (claudeResult.timedOut) failures.push(`Claude timed out after ${scenario.claude.timeout_seconds}s`);
       if (claudeResult.outputTruncated) failures.push('Claude output exceeded Canary\'s 16 MiB capture limit; refusing to evaluate incomplete stream-json output.');
-      if (claudeResult.code !== 0) failures.push(`Claude exited with code ${claudeResult.code}`);
+      if (claudeResult.code !== 0) {
+        const category = classifyClaudeFailure(`${claudeResult.stderr}\n${claudeResult.stdout}`);
+        failures.push(`Claude exited with code ${claudeResult.code}${category ? ` (${category})` : ''}`);
+      }
     }
 
     let metrics = parseStreamMetrics(claudeResult.stdout);

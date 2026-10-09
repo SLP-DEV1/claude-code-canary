@@ -183,6 +183,11 @@ jobs:
           scenario: .canary/action-live.canary.yml
           upload-results: "false"
 
+      - name: Diagnose Action self-test failure without exposing router logs
+        if: failure() && steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
+        shell: bash
+        run: node scripts/live-provider-e2e.mjs diagnose-selected
+
       - name: Stop Action self-test provider router
         if: always() && steps.auth.outputs.configured == 'true' && env.E2E_MODE == 'full'
         shell: bash
@@ -196,7 +201,7 @@ jobs:
           path: |
             ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/results/
             ${{ runner.temp }}/claude-canary-live-e2e/fixture/.canary/repro-live/
-            ${{ runner.temp }}/claude-canary-provider-e2e/
+            ${{ runner.temp }}/claude-canary-provider-e2e/selected.json
             .canary/results/
           if-no-files-found: warn
           include-hidden-files: true

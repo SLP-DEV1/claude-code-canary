@@ -13,6 +13,16 @@ describe('process capture', () => {
     expect(result.stdout.length + result.stderr.length).toBeLessThanOrEqual(1024);
   });
 
+  it('marks timed-out child processes and terminates their process group', async () => {
+    const result = await spawnCapture(
+      process.execPath,
+      ['-e', 'setInterval(() => {}, 1000)'],
+      { cwd: process.cwd(), timeoutMs: 100 },
+    );
+    expect(result.timedOut).toBe(true);
+    expect(result.code).not.toBe(0);
+  });
+
   it('rejects invalid output limits before spawning', async () => {
     await expect(spawnCapture(process.execPath, ['--version'], {
       cwd: process.cwd(),

@@ -1,7 +1,35 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import type { ProcessResult } from './types.js';
 
 const DEFAULT_MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
+
+/**
+ * On POSIX, every child starts in its own process group, allowing a timeout to
+ * terminate shell/grandchild processes as well as Claude itself.
+ * Windows needs taskkill /T, because killing a parent PID leaves children alive.
+ */
+function killProcessTree(child: ChildProcess): void {
+  if (!child.pid) {
+    child.kill('SIGKILL');
+    return;
+  }
+  if (process.platform === 'win32') {
+    try {
+      const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore', windowsHide: true,
+      });
+      killer.once('error', () => { try { child.kill('SIGKILL'); } catch { /* exited */ } });
+    } catch {
+      try { child.kill('SIGKILL'); } catch { /* exited */ }
+    }
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    try { child.kill('SIGKILL'); } catch { /* already exited */ }
+  }
+}
 
 interface SpawnOptions {
   cwd: string;
@@ -36,13 +64,14 @@ export async function spawnCapture(
       resolve({ ...result, durationMs: Date.now() - started });
     };
 
-    let child: ReturnType<typeof spawn>;
+    let child: ChildProcess;
     try {
       child = spawn(executable, args, {
         cwd: options.cwd,
         env: options.env ?? process.env,
         shell: false,
         windowsHide: true,
+        detached: process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (error) {
@@ -64,7 +93,7 @@ export async function spawnCapture(
       const remaining = maxOutputChars - used;
       if (remaining <= 0) {
         outputTruncated = true;
-        child.kill('SIGKILL');
+        killProcessTree(child);
         return;
       }
       const accepted = text.slice(0, remaining);
@@ -72,7 +101,7 @@ export async function spawnCapture(
       else stderr += accepted;
       if (accepted.length < text.length) {
         outputTruncated = true;
-        child.kill('SIGKILL');
+        killProcessTree(child);
       }
     };
 
@@ -99,7 +128,7 @@ export async function spawnCapture(
     if (options.timeoutMs && options.timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGKILL');
+        killProcessTree(child);
       }, options.timeoutMs);
       timer.unref();
     }
