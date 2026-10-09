@@ -2,5 +2,5 @@
   "version": "2.1.0",
   "channel": "v2",
   "publish": true,
-  "releaseRequest": "2026-10-09-v2.1.0-after-pr-97"
+  "releaseRequest": "2026-10-09-v2.1.0-after-pr-98-multi-provider"
 }
