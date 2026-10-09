@@ -4,11 +4,12 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isTerminalProviderCapacityFailure, terminalModelRequestStatus } from './provider-capacity.mjs';
 
 const action = process.argv[2] ?? 'run';
 const mode = process.argv[3] ?? 'core';
-if (!['run', 'start-selected', 'stop'].includes(action)) {
-  console.error('Usage: node scripts/live-provider-e2e.mjs <run|start-selected|stop> [core|full]');
+if (!['run', 'start-selected', 'stop', 'diagnose-selected'].includes(action)) {
+  console.error('Usage: node scripts/live-provider-e2e.mjs <run|start-selected|stop|diagnose-selected> [core|full]');
   process.exit(2);
 }
 if (action === 'run' && !['core', 'full'].includes(mode)) {
@@ -29,7 +30,7 @@ const geminiModel = process.env.CLAUDE_CANARY_GEMINI_MODEL ?? 'gemini-3.6-flash'
 const groqModel = process.env.CLAUDE_CANARY_GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const openRouterModel = process.env.CLAUDE_CANARY_OPENROUTER_MODEL ?? 'openrouter/free';
 
-if (!routerCli && action !== 'stop') {
+if (!routerCli && action !== 'stop' && action !== 'diagnose-selected') {
   throw new Error('CLAUDE_CANARY_CCASR_CLI must point to the built ccasr dist/cli.js file.');
 }
 if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -120,8 +121,10 @@ async function startRouter(providerName, { detached = false } = {}) {
 
   let captured = '';
   if (!detached) {
-    child.stdout?.on('data', (chunk) => { captured += chunk.toString(); process.stdout.write(chunk); });
-    child.stderr?.on('data', (chunk) => { captured += chunk.toString(); process.stderr.write(chunk); });
+    // Keep bounded router diagnostics in memory: raw provider errors can contain account identifiers.
+    const capture = (chunk) => { captured = (captured + chunk.toString()).slice(-256_000); };
+    child.stdout?.on('data', capture);
+    child.stderr?.on('data', capture);
   } else {
     closeSync(stdout);
   }
@@ -173,26 +176,6 @@ function runCaptured(command, args, { cwd, env }) {
   });
 }
 
-function isProviderFallbackEligible(text) {
-  return [
-    /\b429\b/i,
-    /\b503\b/i,
-    /too many requests/i,
-    /rate[ _-]?limit/i,
-    /rate_limit_exceeded/i,
-    /resource[_ -]?exhausted/i,
-    /quota/i,
-    /requests per (?:day|minute)/i,
-    /tokens per (?:day|minute)/i,
-    /\b(?:RPD|RPM|TPD|TPM)\b/i,
-    /service unavailable/i,
-    /temporarily unavailable/i,
-    /overloaded/i,
-    /model(?:s\/|\s+).*no longer available to new users/i,
-    /please update your code to use models\//i,
-  ].some((pattern) => pattern.test(text));
-}
-
 function appendGithubFile(target, values) {
   if (!target) return;
   const lines = Object.entries(values).map(([key, value]) => `${key}=${String(value)}`).join('\n');
@@ -220,7 +203,8 @@ async function runSuite(providerName) {
     return {
       ok: result.status === 0,
       status: result.status,
-      diagnostic: `${result.stdout ?? ''}\n${result.stderr ?? ''}\n${router.captured()}`,
+      providerStatus: terminalModelRequestStatus(router.captured()),
+      capacityFailure: isTerminalProviderCapacityFailure(router.captured()),
     };
   } finally {
     stopChild(router.child);
@@ -234,7 +218,7 @@ async function tryPrimaryWithOpenRouterFallback(primaryName, hasOpenRouter) {
     return { selected: primaryName, fallbackUsed: false };
   }
 
-  if (hasOpenRouter && isProviderFallbackEligible(primary.diagnostic)) {
+  if (hasOpenRouter && primary.capacityFailure) {
     console.warn(`\n${primaryName} hit a provider capacity/availability limit. Retrying the complete live suite through OpenRouter.`);
     const fallback = await runSuite('openrouter');
     if (!fallback.ok) throw new Error(`OpenRouter fallback failed with exit code ${fallback.status}.`);
@@ -309,6 +293,24 @@ async function startSelected() {
   console.log(`Started ${selected.provider} router for the Action self-test (pid ${router.child.pid}).`);
 }
 
+async function diagnoseSelected() {
+  const selected = JSON.parse(await readFile(selectedPath, 'utf8'));
+  if (!providers[selected.provider]) throw new Error('Invalid selected live provider');
+  const logPath = path.join(providerRoot, `ccasr-${selected.provider}.log`);
+  let log = '';
+  try { log = await readFile(logPath, 'utf8'); } catch { /* no router log */ }
+  const status = terminalModelRequestStatus(log);
+  const description = status === 429
+    ? 'Provider request limit/quota exhausted (HTTP 429); no Canary regression established.'
+    : status === 503
+      ? 'Provider temporarily unavailable (HTTP 503); no Canary regression established.'
+      : 'No terminal provider capacity error detected; investigate the Canary Action result.';
+  console.log(`Action self-test diagnosis: ${description}`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    writeFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Action self-test diagnosis\n\n${description}\n`, { flag: 'a' });
+  }
+}
+
 async function stopSelected() {
   try {
     const pid = Number((await readFile(pidPath, 'utf8')).trim());
@@ -322,6 +324,7 @@ async function stopSelected() {
 try {
   if (action === 'run') await runWithFallback();
   else if (action === 'start-selected') await startSelected();
+  else if (action === 'diagnose-selected') await diagnoseSelected();
   else await stopSelected();
 } catch (error) {
   console.error(`live-provider-e2e: ${error instanceof Error ? error.message : String(error)}`);
