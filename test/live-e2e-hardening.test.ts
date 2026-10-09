@@ -42,4 +42,13 @@ describe('release and live E2E hardening', () => {
     expect(driver).not.toContain("Create recorded.txt in the repository root");
   });
 
+  it('gates generated plugin scenarios once before the report-only suite pass', async () => {
+    const driver = await readFile('scripts/live-e2e.mjs', 'utf8');
+
+    expect(driver).toContain("['load.canary.yml', 'command-ping.canary.yml']");
+    expect(driver).toContain("'plugin-matrix'");
+    expect(driver).toContain("'plugin-suite'");
+    expect(driver).toContain("'--allow-incompatible'");
+  });
+
 });
