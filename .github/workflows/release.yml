@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-    branches:
-      - main
-    paths:
-      - .github/manual-release-v2.1.0.json
   workflow_dispatch:
     inputs:
       tag:
@@ -35,9 +31,7 @@ jobs:
         env:
           RELEASE_INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
-            tag="v2.1.0"
-          elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             tag="$RELEASE_INPUT_TAG"
           else
             tag="$GITHUB_REF_NAME"
@@ -50,25 +44,8 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.sha || steps.release.outputs.tag }}
+          ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 0
-
-      - name: Validate one-time manually approved release without tests
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
-          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-          const candidate = JSON.parse(readFileSync('.github/release-candidate.json', 'utf8'));
-          const approval = JSON.parse(readFileSync('.github/manual-release-v2.1.0.json', 'utf8'));
-          if (pkg.version !== '2.1.0' || candidate.version !== '2.1.0' ||
-              candidate.publish !== true || approval.tag !== 'v2.1.0' ||
-              approval.publishWithoutTests !== true) {
-            throw new Error('Manual release requires explicit one-time v2.1.0 approval and matching package/candidate.');
-          }
-          console.log('One-time v2.1.0 no-test publication authorized.');
-          NODE
 
       - name: Capture immutable release commit
         id: commit
@@ -88,18 +65,10 @@ jobs:
         run: npm install --global npm@11.19.0 --ignore-scripts --no-audit --no-fund
 
       - name: Install, verify and build
-        env:
-          MANUAL_NO_TESTS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        shell: bash
         run: |
           npm --version
           npm ci --ignore-scripts --no-audit --no-fund
-          if [[ "$MANUAL_NO_TESTS" == "true" ]]; then
-            echo "::notice::v2.1.0 publishing without tests as expressly requested. Build is still required."
-            npm run build
-          else
-            npm run check
-          fi
+          npm run check
           npm pack --dry-run --ignore-scripts
 
       - name: Verify tag matches package version
@@ -117,7 +86,6 @@ jobs:
           NODE
 
       - name: Require successful full Live Claude E2E on this commit
-        if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ steps.commit.outputs.sha }}
@@ -174,12 +142,6 @@ jobs:
               throw error;
             }
           }
-          const manual = process.env.GITHUB_EVENT_NAME === 'push' && process.env.GITHUB_REF === 'refs/heads/main';
-          const approval = manual ? JSON.parse(readFileSync('.github/manual-release-v2.1.0.json', 'utf8')) : {};
-          // The previous attempt returned npm's accepted/processing response and
-          // signed provenance. Do not submit the identical immutable version twice.
-          const skipUpload = manual && approval.tag === 'v2.1.0' && approval.npmUploadAcknowledged === true;
-          appendFileSync(process.env.GITHUB_OUTPUT, `skip_upload=${skipUpload}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `package=${pkg.name}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
@@ -187,19 +149,12 @@ jobs:
           NODE
 
       - name: Publish package
-        if: steps.npm.outputs.published != 'true' && steps.npm.outputs.skip_upload != 'true'
+        if: steps.npm.outputs.published != 'true'
         env:
           # OIDC Trusted Publishing is preferred. NPM_TOKEN is retained only as
           # an optional bootstrap fallback while the npm trusted publisher is configured.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          MANUAL_NO_TESTS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        shell: bash
-        run: |
-          if [[ "$MANUAL_NO_TESTS" == "true" ]]; then
-            npm publish --access public --provenance --ignore-scripts
-          else
-            npm publish --access public --provenance
-          fi
+        run: npm publish --access public --provenance
 
       - name: Verify package is visible on npm
         env:
@@ -208,33 +163,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 40); do
+          for attempt in 1 2 3 4 5; do
             visible="$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --json 2>/dev/null || true)"
             if [[ "$visible" == "\"$PACKAGE_VERSION\"" || "$visible" == "$PACKAGE_VERSION" ]]; then
               echo "$PACKAGE_NAME@$PACKAGE_VERSION is visible on npm."
               exit 0
             fi
-            echo "npm registry has not exposed $PACKAGE_NAME@$PACKAGE_VERSION yet (attempt $attempt/40)."
-            sleep 15
+            echo "npm registry has not exposed $PACKAGE_NAME@$PACKAGE_VERSION yet (attempt $attempt/5)."
+            sleep 3
           done
           echo "Published package could not be verified in the npm registry." >&2
           exit 1
-
-      - name: Create one-time immutable v2.1.0 tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          set -euo pipefail
-          existing="$(git ls-remote --tags origin refs/tags/v2.1.0 | awk '{print $1}')"
-          sha="$(git rev-parse HEAD)"
-          if [[ -n "$existing" && "$existing" != "$sha" ]]; then
-            echo "::error::v2.1.0 already points to another commit."
-            exit 1
-          fi
-          if [[ -z "$existing" ]]; then
-            git tag v2.1.0 HEAD
-            git push origin refs/tags/v2.1.0
-          fi
 
       - name: Create GitHub Release if needed
         env:
@@ -295,7 +234,6 @@ jobs:
           echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch published consumer smoke
-        if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_VERSION: ${{ steps.npm.outputs.version }}
@@ -319,8 +257,8 @@ jobs:
             echo "- Commit: \`$RELEASE_SHA\`"
             echo "- npm package: \`claude-code-canary@${RELEASE_TAG#v}\`"
             echo "- GitHub Release: created or already present"
-            echo "- Release validation: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'explicitly waived tests for v2.1.0' || 'successful full Live E2E required' }}"
+            echo "- Required release gate: successful \`Live Claude E2E (full)\` on the exact commit"
             echo "- Floating Action tag: \`$MAJOR_TAG\`"
-            echo "- Consumer smoke: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'not run by explicit request' || 'dispatched' }}"
+            echo "- Consumer smoke: dispatched for the exact published version"
             echo "- Provenance: npm Trusted Publishing/OIDC when configured"
           } >> "$GITHUB_STEP_SUMMARY"
