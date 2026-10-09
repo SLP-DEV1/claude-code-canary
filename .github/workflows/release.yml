@@ -186,10 +186,8 @@ jobs:
           # OIDC Trusted Publishing is preferred. NPM_TOKEN is retained only as
           # an optional bootstrap fallback while the npm trusted publisher is configured.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        shell: bash
-        env:
           MANUAL_NO_TESTS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
         run: |
           if [[ "$MANUAL_NO_TESTS" == "true" ]]; then
             npm publish --access public --provenance --ignore-scripts
